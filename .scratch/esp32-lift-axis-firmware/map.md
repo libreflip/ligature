@@ -23,6 +23,9 @@ Produce a decision-complete, safety-gated ESP32 firmware and verification route 
 
 ## Decisions so far
 
+- [Establish current SimpleFOC commissioning-tool options](issues/01-establish-simplefoc-commissioning-tool-options.md) — Evaluate WebController through a firmware-owned bounded Commander adapter; keep it development-only and retain ESP-side capture for timing evidence.
+- [Establish SimpleFOC startup, Hall, and current-sense constraints](issues/02-establish-simplefoc-startup-hall-and-current-sense-constraints.md) — Stored electrical/current-sense calibration can avoid alignment, but startup enable, blocking commissioning, Hall timing, and board current metrology require explicit fixes and tests.
+
 ## Not yet specified
 
 - The actual numeric current, voltage-protection, velocity, acceleration, position-tolerance, timeout, controller-gain, and thermal limits. These depend on powered characterization and the selected control architecture.
@@ -37,4 +40,3 @@ Produce a decision-complete, safety-gated ESP32 firmware and verification route 
 - A general-purpose torque/compliant travel mode. Dedicated touchdown and force-calibration behaviors cover the known contact-controlled cases.
 - A cross-controller vacuum-state interlock or notification protocol; it requires bookscanner orchestration beyond this ESP32-only destination.
 - Hardware redesign, including adding a hardware emergency stop. Supervised powered tests must nevertheless provide an immediate physical means to remove motor power.
-

@@ -1,7 +1,7 @@
 # Define homing, endstop, and position-trust behavior
 
 Type: grilling
-Blocked by: 03, 04, 06, 07
+Blocked by: 07, 13
 
 ## Question
 
