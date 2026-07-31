@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This is a PlatformIO Arduino project for the MKS ESP32 FOC board. Firmware entry points live under `src/`; the current `src/hall_validation/main.cpp` target validates the motor Hall signals without enabling either bridge. Put shared headers in `include/` and project-local libraries in `lib/<name>/`. Add PlatformIO test suites under `test/<suite>/`. Hardware procedures and agent conventions live in `docs/`, while `docs/pdf/` contains reference datasheets and schematics. Treat `specification.md` as the behavioral and safety reference for production firmware.
+This is a PlatformIO Arduino project for the MKS ESP32 FOC board. Firmware entry points live under `src/`; the current `src/hall_validation/main.cpp` target validates the motor Hall signals without enabling either bridge. Put shared headers in `include/` and project-local libraries in `lib/<name>/`. Add PlatformIO test suites under `test/<suite>/`. Hardware procedures and agent conventions live in `docs/`, while `docs/pdf/` contains reference datasheets and schematics. Treat `docs/plan/bldc-driver.md` as the behavioral and safety reference for production firmware.
 
 ## Build, Test, and Development Commands
 
