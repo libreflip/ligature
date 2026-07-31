@@ -1,7 +1,7 @@
 # Inventory the lift-axis hardware and test safeguards
 
 Type: task
-Status: claimed
+Status: resolved
 
 ## Question
 
@@ -42,8 +42,18 @@ Photos of the board power stage/current-sense area, motor terminals, supply cont
 - The validated Hall wiring is already on the matching Motor 1 `ENCODER_1` input, as documented in `docs/hall-validation.md` and `src/hall_validation/main.cpp`.
 - The currently disconnected motor phases will be wired motor U/V/W to board A1/B1/C1 respectively before the powered test.
 - The local board schematic maps Motor 1 phase PWM A1/B1/C1 to GPIO 26/27/14, its enable to GPIO 21, and its current-sense inputs to GPIO 35/34. These are schematic facts; the first test still has to confirm enable polarity, phase/current polarity, scale, and powered behavior on the surviving channel.
-- The motor supply is a Mean Well LRS-150-24. The installation's fuse/protection and immediate physical motor-power removal action remain to be recorded.
+- The motor supply is a Mean Well LRS-150-24. For the current bench setup, the operator will remove its mains plug to physically remove motor power and will keep the plug immediately reachable during powered tests. Supply-side fuse/protection beyond the power supply's own behavior has not been established.
 - The endstop switch is connected between GND and `I_0`; the board schematic maps `I_0` to GPIO 4. Its NO/NC contact choice and asserted logic level remain to be checked with the bridge disabled.
 - The next stage is standalone unloaded-motor testing. The gearbox, belt, suction-box lift axis, and representative books are intentionally not part of this first powered stage and are not yet available for validation.
 
 The `I_0` switch may be used as a fail-fast software stop/interlock during bench testing once its contact behavior is verified. It is not an emergency stop: it depends on the ESP32, input wiring, firmware, and bridge-disable path continuing to work. A separate operator-reachable action that physically removes motor power remains a prerequisite for energizing the motor.
+
+## Answer
+
+The first powered stage is restricted to the standalone, unloaded StepperOnline 42BSA78-24-01 motor on Motor 1 of the Hall-validated MKS ESP32 FOC V1.0 board. Motor 0 is prohibited because two of its MOSFETs were removed. No gearbox, belt, suction box, lift-axis mechanism, or representative book is present for this stage.
+
+Motor 1 uses the already validated `ENCODER_1` Hall inputs: A/B/C on GPIO 23/5/13, 5 V Hall supply, and external 3.3 V pull-ups. Before powered testing, motor U/V/W will be connected to board A1/B1/C1. The schematic maps these PWM outputs to GPIO 26/27/14, enable to GPIO 21, and current-sense inputs to GPIO 35/34. Those routing values are schematic evidence only; enable polarity, phase/current polarity, current scale, offsets, noise, saturation, and powered behavior remain explicit preflight/test measurements rather than assumed facts.
+
+The supply is a Mean Well LRS-150-24. The operator-reachable physical power-removal action for this bench stage is pulling its mains plug, which must remain immediately accessible whenever the motor is energized. The endstop is connected between GND and `I_0`/GPIO 4. It may serve as a latched software stop/interlock after a bridge-disabled contact/polarity check, but it is not an emergency stop and cannot replace pulling mains power.
+
+This inventory is sufficient to decide the unloaded-motor bring-up ladder. That ladder must begin with the phase leads disconnected and verify Motor 1 routing, bridge-disable behavior, `I_0` logic, and current-sense baselines before any progressively powered test. It must prohibit all Motor 0 initialization and drive paths.

@@ -25,6 +25,7 @@ Produce a decision-complete, safety-gated ESP32 firmware and verification route 
 
 - [Establish current SimpleFOC commissioning-tool options](issues/01-establish-simplefoc-commissioning-tool-options.md) — Evaluate WebController through a firmware-owned bounded Commander adapter; keep it development-only and retain ESP-side capture for timing evidence.
 - [Establish SimpleFOC startup, Hall, and current-sense constraints](issues/02-establish-simplefoc-startup-hall-and-current-sense-constraints.md) — Stored electrical/current-sense calibration can avoid alignment, but startup enable, blocking commissioning, Hall timing, and board current metrology require explicit fixes and tests.
+- [Inventory the lift-axis hardware and test safeguards](issues/03-inventory-lift-axis-hardware-and-test-safeguards.md) — Use only Motor 1 for standalone unloaded testing; Hall inputs are validated, while bridge/current behavior remains gated by preflight and the reachable mains plug is the physical power cut-off.
 
 ## Not yet specified
 
