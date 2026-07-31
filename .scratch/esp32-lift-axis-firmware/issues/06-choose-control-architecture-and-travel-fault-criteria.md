@@ -1,7 +1,7 @@
 # Choose the control architecture and travel-fault criteria
 
 Type: grilling
-Blocked by: 02, 04, 05
+Blocked by: 02, 04, 05, 14
 
 ## Question
 

@@ -1,7 +1,7 @@
 # Define the assembled lift-axis powered bring-up and load-test ladder
 
 Type: grilling
-Blocked by: 04, 06, 07
+Blocked by: 04, 06, 07, 14
 
 ## Question
 
