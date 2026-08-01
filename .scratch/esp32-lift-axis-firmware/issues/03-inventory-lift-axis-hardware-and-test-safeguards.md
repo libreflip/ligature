@@ -52,8 +52,15 @@ The `I_0` switch may be used as a fail-fast software stop/interlock during bench
 
 The first powered stage is restricted to the standalone, unloaded StepperOnline 42BSA78-24-01 motor on Motor 1 of the Hall-validated MKS ESP32 FOC V1.0 board. Motor 0 is prohibited because two of its MOSFETs were removed. No gearbox, belt, suction box, lift-axis mechanism, or representative book is present for this stage.
 
-Motor 1 uses the already validated `ENCODER_1` Hall inputs: A/B/C on GPIO 23/5/13, 5 V Hall supply, and external 3.3 V pull-ups. Before powered testing, motor U/V/W will be connected to board A1/B1/C1. The schematic maps these PWM outputs to GPIO 26/27/14, enable to GPIO 21, and current-sense inputs to GPIO 35/34. Those routing values are schematic evidence only; enable polarity, phase/current polarity, current scale, offsets, noise, saturation, and powered behavior remain explicit preflight/test measurements rather than assumed facts.
+Motor 1 uses the already validated `ENCODER_1` Hall inputs: A/B/C on GPIO 23/5/13, 5 V Hall supply, and external 3.3 V pull-ups. Before powered testing, motor U/V/W will be connected to board A1/B1/C1. The schematic maps these PWM outputs to GPIO 26/27/14, enable to GPIO 21, and current-sense inputs to GPIO 35/34. Those routing values are schematic evidence only; enable polarity, phase/current polarity, current scale, offsets, noise, saturation, and powered behavior remain unverified inputs to the smoke test rather than established facts. A successful smoke test may show plausibility but cannot turn them into calibrated measurements.
 
 The supply is a Mean Well LRS-150-24. The operator-reachable physical power-removal action for this bench stage is pulling its mains plug, which must remain immediately accessible whenever the motor is energized. The endstop is connected between GND and `I_0`/GPIO 4. It may serve as a latched software stop/interlock after a bridge-disabled contact/polarity check, but it is not an emergency stop and cannot replace pulling mains power.
 
-This inventory is sufficient to decide the unloaded-motor bring-up ladder. That ladder must begin with the phase leads disconnected and verify Motor 1 routing, bridge-disable behavior, `I_0` logic, and current-sense baselines before any progressively powered test. It must prohibit all Motor 0 initialization and drive paths.
+This inventory is sufficient to decide the unloaded-motor bring-up procedure.
+The current procedure lives in [Define the simple unloaded-motor powered
+bring-up and smoke
+test](04-define-safe-powered-bring-up-and-motor-test-ladder.md); its 2026-08-01
+revision accepts the replaceable bridge/motor risk and no longer requires the
+earlier phase-disconnected, `I_0`, and current-baseline gate ladder. Motor 0
+remains prohibited and the mains plug remains the supervised physical
+power-removal method.
