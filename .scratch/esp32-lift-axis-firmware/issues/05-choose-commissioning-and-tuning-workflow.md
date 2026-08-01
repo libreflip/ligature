@@ -1,6 +1,7 @@
 # Choose the commissioning and tuning workflow
 
 Type: grilling
+Status: claimed
 Blocked by: 01, 02, 04
 
 ## Question

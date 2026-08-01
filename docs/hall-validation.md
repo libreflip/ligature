@@ -15,7 +15,13 @@ motor driver:
 - Hall C: MKS `I_1`, GPIO 13
 - Hall sensor supply: 5 V
 - Hall signal pull-ups: external 3.3 V pull-up board only
-- Motor bridge enables: GPIO 22 and GPIO 21, both held low by the diagnostic
+- Motor 0 phase controls A/B/C: GPIO 32/33/25, held low by the diagnostic
+- Motor 1 phase controls A/B/C: GPIO 26/27/14, held low by the diagnostic
+
+The MKS ESP32 FOC V1.0 schematic has no separate motor-driver enable input;
+GPIO 21 and GPIO 22 are unconnected. Holding all six phase controls low means
+PWM is off, but it does not remove bridge power. Only disconnecting motor power
+provides physical isolation.
 
 Keep the motor phase leads disconnected for this test. The SS41F/SS41G Hall
 sensors have open-collector sinking outputs; the external pull-ups establish
@@ -47,7 +53,8 @@ Flash the SimpleFOC variant explicitly:
 
 The expected boot record begins with
 `READY app=simplefoc-hall-validation baud=460800` and confirms
-`bridges=DISABLED`, `simplefoc=2.4.0`, `pole_pairs=4`, and
+`motor0_pwm=LOW motor1_pwm=LOW pwm_state=OFF`, `simplefoc=2.4.0`,
+`pole_pairs=4`, and
 `pullups=EXTERNAL`.
 
 ## Live check
@@ -127,9 +134,11 @@ documentation therefore continue to use sequence direction and angle sign
 rather than claiming an absolute physical CW/CCW mapping.
 
 This validates the Hall inputs and SimpleFOC's `HallSensor` interpretation
-only. The motor phases were disconnected, both bridges remained disabled, and
-PWM, phase alignment, motor actuation, and controlled-speed velocity accuracy
-were not tested.
+only. The motor phases were disconnected and the firmware did not initialize
+PWM or a motor driver. Earlier versions also drove GPIO 21/22 low, but the
+schematic marks those pins unconnected; that action did not disable either
+bridge. PWM, phase alignment, motor actuation, and controlled-speed velocity
+accuracy were not tested.
 
 ## Known SimpleFOC velocity risk
 

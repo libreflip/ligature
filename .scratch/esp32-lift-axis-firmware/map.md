@@ -13,6 +13,7 @@ Produce a decision-complete, safety-gated ESP32 firmware and verification route 
 - Use the vocabulary in `CONTEXT.md`. Use `grilling` and `domain-modeling` for decision tickets, `research` for current upstream facts, and `diagnosing-bugs` when physical tests produce anomalous behavior.
 - Planning is the default. Add manual `wayfinder:task` tickets only when a measurement or physical action is required before a later decision can be made.
 - For standalone unloaded Motor 1 bring-up, accept the replaceable bridge and motor as development consumables. Use the two-command, low-current-first smoke test rather than adding hardware-abort, meter-qualification, staged-gate, precision-characterization, or high-rate-capture prerequisites; basic operator precautions still apply.
+- The MKS ESP32 FOC V1.0 schematic has no separate motor-driver enable input; GPIO 21/22 are unconnected. Software inactivity means zero/low PWM commands, not bridge-power isolation. Only the supervised mains action removes bridge power.
 - Separate compilation and automated-test evidence from physical hardware validation. Never claim motor, Hall, current-sense, endstop, homing, or touchdown behavior without the corresponding device test.
 - Boot, reset, serial reconnect, and ordinary arming must not initiate motion. Any motion-capable SimpleFOC alignment requires an explicit supervised commissioning operation.
 - A commissioning GUI may tune bounded parameters and inspect diagnostics, but is not a production control interface and must obey the same safety gates.
@@ -25,9 +26,10 @@ Produce a decision-complete, safety-gated ESP32 firmware and verification route 
 ## Decisions so far
 
 - [Establish current SimpleFOC commissioning-tool options](issues/01-establish-simplefoc-commissioning-tool-options.md) — Evaluate WebController through a firmware-owned bounded Commander adapter; keep it development-only and retain ESP-side capture for timing evidence.
-- [Establish SimpleFOC startup, Hall, and current-sense constraints](issues/02-establish-simplefoc-startup-hall-and-current-sense-constraints.md) — Stored electrical/current-sense calibration can avoid alignment, but startup enable, blocking commissioning, Hall timing, and board current metrology require explicit fixes and tests.
+- [Establish SimpleFOC startup, Hall, and current-sense constraints](issues/02-establish-simplefoc-startup-hall-and-current-sense-constraints.md) — Stored electrical/current-sense calibration can avoid alignment, but startup PWM state, blocking commissioning, Hall timing, and board current metrology require explicit fixes and tests.
 - [Inventory the lift-axis hardware and test safeguards](issues/03-inventory-lift-axis-hardware-and-test-safeguards.md) — Use only Motor 1 for standalone unloaded testing; Hall inputs are validated, bridge/current behavior is not, and the reachable mains plug is the physical power cut-off.
 - [Define the simple unloaded-motor powered bring-up and smoke test](issues/04-define-safe-powered-bring-up-and-motor-test-ladder.md) — Accept bridge/motor loss risk and use one two-command sequence with a 0.25 A motion probe before any 0.50 A retry.
+- [Implement and run the simple unloaded-motor smoke test](issues/14-execute-safe-unloaded-motor-powered-bring-up.md) — Motor 1 passed the bounded 0.9 V bidirectional unloaded smoke test with opposite legal Hall sequences, passive stops, nominal 1.571 A peak, and final PWM off; modest roughness is deferred to commissioning rather than treated as production validation.
 
 ## Not yet specified
 

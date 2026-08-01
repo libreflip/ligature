@@ -54,6 +54,12 @@ Full electrical/GPIO detail, wire colors, connector pinout, and the
 still-open hardware-verification items (Hall A/B/C pin order, exact
 endstop pin, which motor channel): `reference/esp32-foc-firmware-requirements.md`.
 
+The MKS ESP32 FOC V1.0 schematic has no separate motor-driver enable input;
+GPIO 21 and GPIO 22 are unconnected. Throughout this specification, “PWM
+disabled” means all three phase PWM commands for the channel are forced
+low/zero and the motor is inactive in software. It does not remove bridge
+power. Only disconnecting motor power provides physical isolation.
+
 ---
 
 ## 3. Safety requirements (binding, non-negotiable)
@@ -78,8 +84,8 @@ endstop pin, which motor channel): `reference/esp32-foc-firmware-requirements.md
    during touchdown, the photo-capture hold, any subsequent move, a jog,
    or the move-to-top approach (§10, which is specifically aimed to stop
    short of it) — is a **hard fault**:
-   - Motor is cut immediately and completely (PWM disabled), not a
-     controlled deceleration.
+   - All phase PWM commands go to zero immediately, not through a controlled
+     deceleration. This is not bridge-power isolation.
    - An unsolicited `fault ENDSTOP_UNEXPECTED` message (§6) is sent to
      the host — never a silent stop.
    - Reading the endstop and *stopping* an already-commanded move is not
@@ -161,9 +167,9 @@ used for `M3`/`M5`.
 
 | Command | Meaning |
 |---|---|
-| `M3` | **Start job** — arms the driver (enables PWM stage), makes it ready to accept motion commands. Required once per session before anything else moves. Does **not** by itself run homing or any motion. |
+| `M3` | **Start job** — arms active control, making it ready to accept motion commands. There is no separate hardware-enable pin. Required once per session before anything else moves. Does **not** by itself run homing or any motion. |
 | `M5` | **End job** — disarms the driver (disables PWM), returns to the boot-time idle state. Safe to call any time; always succeeds. |
-| `M112` | **Immediate stop.** Highest priority — processed even mid-move, ahead of anything else in flight. Cuts the driver immediately (PWM disabled), not a decel ramp. Responds `done M112`. **The command it interrupted gets no `done`/`error` of its own** — `M112`'s response is the only one the host should expect for that in-flight command; don't wait for a second response that will never arrive. Does **not** disarm (`M3` state is retained — a subsequent motion command works without re-arming), unlike `M5`. Used both for genuine emergencies (Stop button, unsolicited fault) and for routine cases where the host decides mid-move that it wants to abort and retry (e.g. a failed pickup-success check during `G73`, §6.1) — the board treats both identically, it has no notion of "routine" vs. "emergency." |
+| `M112` | **Immediate stop.** Highest priority — processed even mid-move, ahead of anything else in flight. Commands all phase PWMs zero immediately, not a decel ramp; it does not isolate bridge power. Responds `done M112`. **The command it interrupted gets no `done`/`error` of its own** — `M112`'s response is the only one the host should expect for that in-flight command; don't wait for a second response that will never arrive. Does **not** disarm (`M3` state is retained — a subsequent motion command works without re-arming), unlike `M5`. Used both for genuine emergencies (Stop button, unsolicited fault) and for routine cases where the host decides mid-move that it wants to abort and retry (e.g. a failed pickup-success check during `G73`, §6.1) — the board treats both identically, it has no notion of "routine" vs. "emergency." |
 | `?` | **Status query.** No `ok`/`done` framing — replies immediately, single line: `<STATE|Pos:<mm or "?">|Torque:<amps>|Homed:<0 or 1>>`. `STATE` ∈ `Idle`, `Armed`, `Moving`, `Holding`, `Homing`, `Fault`. Position is `?` until homed. Always answerable, regardless of armed/homed state. |
 
 ---

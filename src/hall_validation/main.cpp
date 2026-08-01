@@ -21,9 +21,15 @@ constexpr uint8_t kHallPinA = 23;  // SDA_1
 constexpr uint8_t kHallPinB = 5;   // SCL_1
 constexpr uint8_t kHallPinC = 13;  // I_1
 
-// Both power stages must remain disabled throughout this diagnostic.
-constexpr uint8_t kMotor0EnablePin = 22;
-constexpr uint8_t kMotor1EnablePin = 21;
+// MKS ESP32 FOC V1.0 phase-control nets. The schematic has no separate
+// bridge-enable input, so this diagnostic holds all six controls low. This is
+// a software PWM-off state, not power isolation.
+constexpr uint8_t kMotor0PwmA = 32;
+constexpr uint8_t kMotor0PwmB = 33;
+constexpr uint8_t kMotor0PwmC = 25;
+constexpr uint8_t kMotor1PwmA = 26;
+constexpr uint8_t kMotor1PwmB = 27;
+constexpr uint8_t kMotor1PwmC = 14;
 
 constexpr uint8_t kMotorPolePairs = 4;
 constexpr uint16_t kTransitionsPerMotorRevolution = 24;
@@ -642,12 +648,14 @@ void printHeartbeat() {
 }  // namespace
 
 void setup() {
-  // Establish the safe output latch before changing either enable pin to an
-  // output. No driver or PWM object is ever initialized by this diagnostic.
-  digitalWrite(kMotor0EnablePin, LOW);
-  digitalWrite(kMotor1EnablePin, LOW);
-  pinMode(kMotor0EnablePin, OUTPUT);
-  pinMode(kMotor1EnablePin, OUTPUT);
+  // Establish low output latches before changing the phase-control pins to
+  // outputs. No driver or PWM object is ever initialized by this diagnostic.
+  constexpr uint8_t pwmPins[] = {kMotor0PwmA, kMotor0PwmB, kMotor0PwmC,
+                                 kMotor1PwmA, kMotor1PwmB, kMotor1PwmC};
+  for (const uint8_t pin : pwmPins) {
+    digitalWrite(pin, LOW);
+    pinMode(pin, OUTPUT);
+  }
 
   // Deliberately do not enable the ESP32's internal pull-ups. The external
   // 3.3 V pull-up board is part of the hardware path under test.
@@ -675,14 +683,14 @@ void setup() {
 
   Serial.printf(
       "READY app=%s baud=%lu A=%u B=%u C=%u "
-      "motor0_enable=%u motor1_enable=%u bridges=DISABLED abc=",
+      "motor0_pwm=LOW motor1_pwm=LOW pwm_state=OFF abc=",
 #if HALL_USE_SIMPLEFOC
       "simplefoc-hall-validation",
 #else
       "hall-validation",
 #endif
       static_cast<unsigned long>(HALL_SERIAL_BAUD), kHallPinA, kHallPinB,
-      kHallPinC, kMotor0EnablePin, kMotor1EnablePin);
+      kHallPinC);
   printHallState(currentState);
 #if HALL_USE_SIMPLEFOC
   Serial.printf(" simplefoc=2.4.0 pole_pairs=%u pullups=EXTERNAL",
