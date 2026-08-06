@@ -5,4 +5,4 @@ Blocked by: 11
 
 ## Question
 
-What automated, PWM-off, unloaded-motor, assembled-lift-axis, representative-book, fault-injection, calibration-repeatability, stop-position, long-idle, soak, and regression evidence must pass at each milestone before the ESP32 firmware is allowed to advance from commissioning to production acceptance?
+What automated, protocol-conformance, PWM-off boot/reset/reconnect, calibration-validity, unloaded-motor, assembled-lift-axis, representative-book, endstop/soft-limit, fault-injection, `M112` versus `M53` stop-position, heartbeat/event timing, Hall long-idle, control-deadline, soak, and regression evidence must pass at each Ligature milestone before firmware advances from commissioning to production acceptance?

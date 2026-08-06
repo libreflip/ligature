@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This is a PlatformIO Arduino project for the MKS ESP32 FOC board. Firmware entry points live under `src/`; the current `src/hall_validation/main.cpp` target validates the motor Hall signals without enabling either bridge. Put shared headers in `include/` and project-local libraries in `lib/<name>/`. Add PlatformIO test suites under `test/<suite>/`. Hardware procedures and agent conventions live in `docs/`, while `docs/pdf/` contains reference datasheets and schematics. Treat `docs/plan/bldc-driver.md` as the behavioral and safety reference for production firmware.
+This is a PlatformIO Arduino project for the MKS ESP32 FOC board. Firmware entry points live under `src/`; the current `src/hall_validation/main.cpp` target validates the motor Hall signals without enabling either bridge. Put shared headers in `include/` and project-local libraries in `lib/<name>/`. Add PlatformIO test suites under `test/<suite>/`. Hardware procedures and agent conventions live in `docs/`, while `docs/pdf/` contains reference datasheets and schematics. Treat `docs/plan/ligature.md` as the behavioral and safety reference for production firmware.
 
 ## Build, Test, and Development Commands
 
@@ -27,7 +27,7 @@ There is currently no automated coverage requirement and no test implementation 
 
 ## Commit & Pull Request Guidelines
 
-The repository has no established commit-message history yet. Until one emerges, use a short imperative summary such as `Validate six-state Hall sequence`, and keep each change focused. Pull requests should explain the hardware behavior affected, list build/test evidence, link the relevant `.scratch/` issue, and include serial output when behavior is device-dependent.
+Use Conventional Commits with a short imperative summary: `<type>[optional scope]: <description>`, for example `docs: update firmware wayfinding for Ligature spec` or `fix(hall): reject invalid transition`. Use the narrowest fitting type (`feat`, `fix`, `docs`, `test`, `refactor`, `chore`) and keep each change focused. Pull requests should explain the hardware behavior affected, list build/test evidence, link the relevant `.scratch/` issue, and include serial output when behavior is device-dependent.
 
 ## Agent skills
 
