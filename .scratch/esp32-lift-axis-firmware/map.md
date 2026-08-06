@@ -31,6 +31,7 @@ Produce a decision-complete implementation and verification route for `docs/plan
 - [Define the simple unloaded-motor powered bring-up and smoke test](issues/04-define-safe-powered-bring-up-and-motor-test-ladder.md) — Accept bridge/motor loss risk and use one fixed, two-command unloaded diagnostic rather than a multi-gate qualification ladder.
 - [Choose the commissioning and tuning workflow](issues/05-choose-commissioning-and-tuning-workflow.md) — Use stock WebController through explicit ordinary/raw firmware gates, minimal immutable motion/electrical ceilings, promoted JSON/NVS profiles, and control-priority serial servicing in one supervised acceptance procedure.
 - [Implement and run the simple unloaded-motor smoke test](issues/14-execute-safe-unloaded-motor-powered-bring-up.md) — Motor 1 passed the bounded 0.9 V bidirectional unloaded smoke test with opposite legal Hall sequences, passive stops, nominal 1.571 A peak, and final PWM off; modest roughness is deferred to commissioning rather than treated as production validation.
+- [Choose the control architecture and travel-fault criteria](issues/06-choose-control-architecture-and-travel-fault-criteria.md) — Use position/velocity/measured-current cascade control, simple target settling and progress/deadline checks, explicit disarming failures, and commissioning-derived limits without added thermal or overspeed machinery.
 
 ## Not yet specified
 
