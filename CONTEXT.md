@@ -8,6 +8,10 @@ Firmware concepts for controlling and validating the bookscanner's vertical suct
 The assembled motor, gearbox, belt drive, endstop, and suction box whose vertical motion this firmware controls. Production validation includes this mechanism and representative books, not only an unloaded motor.
 _Avoid_: Motor setup, Z axis
 
+**Geared motor assembly**:
+Motor 1 with its 10:1 gearbox attached while the gearbox output is otherwise unloaded. It is a commissioning test boundary, not the assembled lift axis and not production-load validation.
+_Avoid_: Lift axis, unloaded motor
+
 **Travel move**:
 A commanded lift-axis move whose successful outcome requires reaching the requested position. An obstruction or inability to reach that position is a fault, not a successful partial move.
 _Avoid_: Compliant move, torque move
