@@ -14,19 +14,29 @@ index between the two.
 
 | Board/file | Tasks |
 |---|---|
-| [`bldc-driver.md`](bldc-driver.md) (MKS ESP32 FOC) | T32 (firmware), T20 (protocol design half only — RPi-side client half is `sans-serif.md`) |
-| [`monospace.md`](monospace.md) (Arduino) | T22 (firmware/protocol design half only — RPi-side client half is `sans-serif.md`) |
-| [`sans-serif.md`](sans-serif.md) (Raspberry Pi, backend + UI) | T1, T2, T3, T4, T6, T7, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20 (RPi client half), T21, T22 (RPi client half), T23, T24, T25, T26, T27, T28, T29, T30, T31 |
+| [`ligature.md`](ligature.md) (MKS ESP32 FOC) | T32 (firmware), T20 (protocol design half only — RPi-side client half is `sans-serif.md`) |
+| [`monospace.md`](monospace.md) (Arduino) | T22 (firmware/protocol design half only — RPi-side client half is `sans-serif.md`), T21 (firmware half only — RPi-side client half is `sans-serif.md`), T34 (firmware half only — RPi-side client+logic half is `sans-serif.md`) |
+| [`sans-serif.md`](sans-serif.md) (Raspberry Pi, backend + UI) | T1, T2, T3, T4, T6, T7, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20 (RPi client half), T21 (RPi client half), T22 (RPi client half), T23, T24, T25, T26, T27, T28, T29, T30, T31, T35 |
 | Out of scope for these three files (Z2/Z3, VM-side, not machine software) | T5, T8, T33 |
 
 **Notes:**
-- T20 and T22 are the only tasks split across two files: the wire
-  protocol/firmware behavior is now specified in `bldc-driver.md`/
+- T20, T21, and T22 are the tasks split across two files: the wire
+  protocol/firmware behavior is now specified in `ligature.md`/
   `monospace.md` respectively (per AD-006); the RPi-side client
   implementing against that protocol is specified in `sans-serif.md` §1.
+  T21 was originally RPi-direct-only (before AD-001's 2026-08-01
+  reversal moved the BMP180 back to the Arduino) — now split like T20/T22.
 - T9/T10 (recovery/jog controls) are UI+client logic on the RPi side
   (`sans-serif.md`), even though the motion they trigger is executed by
   the FOC board — the button and its state logic live on the RPi.
+- T34/T35 follow the same T20/T21/T22 split pattern (added 2026-08-08,
+  `architecture.md` AD-009): T34 is the Arduino-side firmware
+  (`monospace.md` §10), T35 is both the RPi-side Arduino-client
+  additions (`sans-serif.md` §1.2) *and* the indicator/button-routing
+  logic (`sans-serif.md` §11) — unlike T20/T21/T22, that logic piece
+  has no firmware-side counterpart at all (§11 is pure RPi-side
+  decision-making over already-existing state), so there's no third
+  file to split it into.
 
 ---
 
@@ -205,6 +215,17 @@ T9–T14 are all confirmed MVP (ijon, 2026-07-26).
   navigating away from the scan view.
 - **Depends on:** BMP180 I2C driver on RPi (AD-001), Auto-Scan loop
   implementation.
+- **Optional idea, not committed (ijon, 2026-08-01):** instead of (or
+  in addition to) the numeric N-2/N-1/current differential values
+  above, show the pressure-over-time curve of the suction box during
+  the current/most recent flip cycle as a graph. Explicitly **not**
+  requested as a firm MVP requirement, and it's still open whether ads
+  (auto-detected-separation / pickup-detection logic) even counts as
+  MVP scope in the first place — only worth doing here if it drops out
+  essentially for free from whatever pressure-sampling/plotting T11
+  already needs, otherwise this stays parked for v2. No implementation-
+  effort estimate exists yet, so no MVP/v2 call has been made either
+  way.
 
 #### T12 — Pressure diagnostics log (`pressure-log.jsonl`) — confirmed (ijon, 2026-07-26)
 - **Scope:** persist, per flip cycle, `ambient_mbar` /
@@ -215,7 +236,7 @@ T9–T14 are all confirmed MVP (ijon, 2026-07-26).
   across many books/sessions. **Extended 2026-07-29:** also log
   `touchdown_position` and `touchdown_compression` from T23's
   `touchdown()` result, for the same per-flip-cycle entry — the whole
-  point is correlating stop position, press force, and pneumatic
+  point is correlating stop position, press force, and differential
   pressure together for debugging/analysis, not just the pressure side
   alone.
 - **Done when:** a completed test scan job's uploaded archive contains
@@ -420,14 +441,40 @@ done here.
     page width** (`scan-process.md` step 8: 30%, 60–70%, −10% relative,
     80%) — unaffected by the above, plain absolute/relative moves once
     homed.
-  - **Immediate stop/abort-current-move** — required so the Stop button
-    (T24) can interrupt a move in progress, not only between completed
-    moves.
+  - **Two distinct abort/stop operations, not one — corrected 2026-08-02
+    (was originally scoped as a single undifferentiated "immediate
+    stop/abort," the same category-blur `ligature.md` itself
+    originally had and has since fixed, §3.8):**
+    - `abort_attempt()` (`M53`, `ligature.md` §6.2) — the **routine**
+      operation the pickup-success check (T23) uses to cancel an
+      in-flight `complete_page_turn()` on a failed pickup. Stops motion
+      only; stays armed and homed; the caller sends a fresh
+      `touchdown()` right after, no re-arming needed.
+    - `stop()` (`M112`) — **genuine emergency stop only**, for the Stop
+      button (T24) and unsolicited firmware faults (below). Disarms and
+      puts the board into a latched `Fault` state — T20 must also expose
+      `clear_fault()` (`M999`), which clears the latch but does **not**
+      itself re-arm or re-home; the caller still needs a fresh `arm()`
+      (and `home()`) afterward. Never use `stop()` for the routine
+      pickup-failure case — that's what `abort_attempt()` is for.
   - **Unsolicited error handling** — the firmware can send an error
     without being asked (in particular: an unexpected-endstop hard-stop,
-    cutting power immediately with no deceleration). T20 must listen for
-    and surface these, not just handle request/response pairs — treat
-    the same as a Stop-button press in whatever's driving the loop (T24).
+    cutting power immediately with no deceleration, and also latching
+    `Fault` per the point above). T20 must listen for and surface these,
+    not just handle request/response pairs — treat the same as a
+    Stop-button press in whatever's driving the loop (T24), including
+    the fact that recovery now requires `clear_fault()`+`arm()`, not
+    just resending whatever move was interrupted.
+  - **Telemetry beyond position/homed** — `status()` (`?`) now also
+    reports velocity, torque/force, and drive mode, and its state enum
+    includes `Probing` (a `touchdown()`'s active contact-search phase)
+    as distinct from a plain `Moving` positional move — T20 should
+    surface this distinction, not collapse it. A continuous unsolicited
+    `status` heartbeat also exists (`ligature.md` §4.2/§12,
+    rate-configurable via `M155`) — primarily useful for the diagnostic
+    tool (`foc_diag`) and touchdown-tuning work, not required for T20's
+    own normal operation, which gets what it needs from polling
+    `status()` directly.
   - **mm/force calibration trigger** — the position (mm-per-motor-
     revolution) and press-force calibration procedures run as firmware
     on the ESP32 itself, but must be triggerable from the RPi side (they
@@ -452,38 +499,109 @@ done here.
   homing command establishes zero, after which absolute moves succeed —
   the same absolute moves attempted *before* homing are refused with a
   distinguishable error; an unexpected-endstop fault sent by the
-  firmware is received and treated as equivalent to a Stop.
+  firmware is received, latches `Fault`, and is treated as equivalent to
+  a Stop — **and** (added 2026-08-02) `abort_attempt()`/`M53` correctly
+  cancels an in-flight `complete_page_turn()` without disarming or
+  faulting, verifiably distinct from what `stop()`/`M112` does.
 - **Depends on:** FOC board wired direct to RPi, SimpleFOC firmware
-  flashed and configured per the firmware requirements doc below
-  (outstanding hardware/firmware bring-up, tracked separately — protocol
-  client code can proceed in parallel, but end-to-end verification needs
-  that firmware work done first).
-- **Full requirements document:**
+  flashed and configured per `ligature.md` (outstanding hardware/
+  firmware bring-up, tracked separately — protocol client code can
+  proceed in parallel, but end-to-end verification needs that firmware
+  work done first; current bring-up status/sequence:
+  `ligature-AGENTS.md`).
+- **Full requirements document:** [`ligature.md`](ligature.md) —
+  self-contained, authoritative protocol spec this task's client code
+  must match (full command set, safety requirements incl. the `M112`/
+  `M53`/`Fault` distinction §3.8, telemetry §12, worked example §14).
+  **Corrected 2026-08-02:** this used to point to
   [`reference/esp32-foc-firmware-requirements.md`](reference/esp32-foc-firmware-requirements.md)
-  — self-contained firmware spec this task's client code must match
-  (protocol base, safety requirements, touchdown/homing/move-to-top
-  behavior, calibration, error reporting). That document's Milestone 1
-  (safe demo/jog firmware, no real page-turning) is a narrower first
-  target than this task's full scope — its Milestone 2 corresponds to
-  T32 (firmware side) and this task's full behavior (RPi side).
+  as the primary spec — that document predates `ligature.md` and was
+  itself superseded by it for protocol matters back at AD-006
+  (`architecture.md`); it remains useful for hardware-only detail
+  (GPIO map, connector pinouts, open hardware-verification items) but
+  isn't what this task's client code should be checked against anymore.
+  Milestone 1 (safe demo/jog, no real page-turning, per the reference
+  doc) is a narrower first target than this task's full scope —
+  Milestone 2 corresponds to T32 (firmware side) and this task's full
+  behavior (RPi side).
 
-#### T21 — BMP180 I2C driver (RPi-direct)
-- **Scope:** RPi-side I2C driver (e.g. via `smbus2`) reading the BMP180
-  pressure sensor directly, following the standard Bosch calibration/
-  read procedure — `monospace`'s `SFE_BMP180` driver is a valid
-  reference for the formulas even though its C++ code isn't reused
-  (AD-001: "Standard-RPi-Python-Terrain, geringer Aufwand"). Exposes
-  ambient-pressure-read and differential-pressure-read operations,
-  consumed by the Auto-Scan Controller (T11/T12/T14) and the
-  Setup-Calibration Controller (page-width derivation, T3).
-- **Done when:** reading pressure from the RPi-connected BMP180 on the
-  real hardware produces a plausible ambient-pressure value, sanity-
-  checked against a known reference (e.g. a phone barometer app or
-  published local atmospheric pressure).
-- **Depends on:** BMP180 wired directly to RPi (confirmed, AD-001,
-  2026-07-25/26).
+#### T21 — BMP180 pressure read (Arduino-side firmware + RPi client) — firmware+client slice done (2026-08-01/02)
+- **Scope (revised 2026-08-01 — AD-001's RPi-direct BMP180 decision was
+  reversed; the sensor stays on the Arduino, see `architecture.md`
+  AD-001 and `monospace.md` §1/§5/§6):** ~~RPi-side I2C driver (e.g. via
+  `smbus2`) reading the BMP180 pressure sensor directly~~. Now two
+  halves, like T20/T22: **(a) Arduino-side** — implement `PRESS?`
+  (single-shot, averaged) and `PRESS START`/`PRESS STOP` (continuous
+  streaming) per `monospace.md` §5/§6; `monospace`'s existing
+  `SFE_BMP180` driver code is a direct reference for the Bosch
+  calibration/read procedure here (unlike the old RPi-side-rewrite plan,
+  this C++ code is now actually reused, not just referenced for its
+  formulas). **(b) RPi-side** — the Rust Arduino client's pressure
+  functions (`sans-serif.md` §1.2): `read_ambient_pressure()`,
+  `start_pressure_stream()`/`stop_pressure_stream()`. Consumed by the
+  Auto-Scan Controller (T11/T12/T14) and the Setup-Calibration
+  Controller (page-width derivation, T3).
+- **Done when:** (a) `PRESS?` on the physically connected Arduino
+  produces a plausible ambient-pressure value, sanity-checked against a
+  known reference (e.g. a phone barometer app or published local
+  atmospheric pressure); (b) `PRESS START` sustains a measured reading
+  rate against the target in `monospace.md` §6 (≥5/s, ideally up to
+  50/s) without corrupting relay-command responses sent on the same
+  connection while streaming.
+- **Depends on:** BMP180 wired to the Arduino (confirmed, 2026-07-25);
+  Arduino firmware implementing `PRESS?`/`PRESS START`/`PRESS STOP` —
+  **done, see below**, no longer a blocker.
+- **Pulled forward (ijon, 2026-08-02, see `architecture.md` AD-007 for
+  the full reuse/alternatives reasoning):** the RPi-side pressure-read
+  client's first concrete deliverable is a diagnostic binary at
+  `sans-core/src/bin/hw_diag.rs` (shared with T22's relay commands,
+  same binary, same naming convention as the existing `camcal.rs`),
+  rather than waiting for full Auto-Scan integration.
+  - **Subcommands:** `press` (single-shot, prints one `mbar` value) and
+    `press-stream` (prints timestamped values as they arrive, plus an
+    optional `--log <file.csv>` flag — needed because deriving
+    real pickup-success/-failure thresholds from this data requires
+    something more parseable than terminal scrollback).
+  - **Usage (SSH, once built):**
+    `./target/release/hw_diag --port /dev/ttyACM0 press` and
+    `./target/release/hw_diag --port /dev/ttyACM0 press-stream --log pressure-test.csv`.
+  - **Zero-code fallback while this binary doesn't exist yet:**
+    `arduino-cli monitor -p <port> -c baudrate=<rate>` (`monospace.md`
+    §8) already lets you type `PRESS?`/`PRESS START` and read responses
+    over SSH — use it for the first "does the board even respond" check
+    while `hw_diag` is still being built.
+  - **Verification order:** confirm each pressure command works via
+    `arduino-cli monitor` first, *then* re-verify the same command
+    through `hw_diag` once it exists — the CLI's own serial handling is
+    new code and needs its own check, not just a port of
+    already-verified firmware behavior.
+  - Once working, it's expected (not just tolerated) that ijon uses
+    `press-stream --log` during manual pickup attempts on a real book
+    to start collecting threshold-relevant data — that's the actual
+    point of pulling this forward rather than waiting for full
+    Auto-Scan integration.
+  - **Done (2026-08-01/02):** `monospace` PR #2 → `master` (`17d547b`)
+    implements `PRESS?`/`PRESS START`/`PRESS STOP` exactly per
+    `monospace.md` §5/§6, including the AVR watchdog (`WDTO_8S`) and
+    `\r\n`-tolerant line parsing from §3/§4. `sans` PR #6 → `master`
+    (`beab768`) adds `hw_diag` as the single-session interactive tool
+    from `monospace.md` §9, plus the typed Rust client functions
+    (`sans-core/src/hardware/`). **Both "Done when" criteria above are
+    met on real hardware:** (a) `PRESS?` produces plausible ambient
+    values (~1016 mbar, matching normal atmospheric pressure); (b)
+    `PRESS START` sustained ~49 Hz at oversampling=2 — comfortably above
+    the ≥5/s target and close to the ≤50/s ideal, with relay commands
+    still working correctly interleaved with streaming (confirmed via
+    the manual multi-attempt test, `docs/hardware/bmp180-vacuum-drop-test.md`).
+    Chosen baud rate: `115200` (not the old firmware's `9600` or old
+    Rust client's `9200`, per the explicit warning in `monospace.md`
+    §8/testing notes). **Not yet done, separate from this task:**
+    consuming these client functions from the actual Auto-Scan
+    Controller (T24) or Setup-Calibration Controller (T3) — this task's
+    scope was the firmware + a standalone diagnostic client, not
+    application integration.
 
-#### T22 — Arduino relay protocol design + RPi-side client
+#### T22 — Arduino relay protocol design + RPi-side client — firmware+client slice done (2026-08-01/02)
 - **Scope (revised 2026-07-29 — walking back the previous "integration,
   not new development" framing after actually reading `sans-core` and
   `monospace` in full, see
@@ -497,15 +615,23 @@ done here.
   `FlipPage(spine_width)` that runs an entire flip cycle autonomously on
   the Arduino with no mid-sequence feedback to the host) — confirmed by
   reading `bookscanner.cpp`'s `flip_page()` directly. There is no
-  existing `vacuum_on()`/`fan_on()`/`turn_blower_on()`/`light_auto()`/
-  pneumatic-sensor-read at the protocol level, and `flip_page()` can't be
-  reused even reworked — it's inseparable from direct stepper-motor
-  control that no longer exists (moved to the ESP32, P1).
+  existing `vacuum_on()`/`fan_on()`/`turn_blower_on()`/`light_auto()` at
+  the protocol level, and `flip_page()` can't be reused even reworked —
+  it's inseparable from direct stepper-motor control that no longer
+  exists (moved to the ESP32, P1).
   **This task is therefore real protocol design, not integration:**
   design a new Arduino-side command set exposing vacuum on/off,
-  page-separation fan on/off, turn-blower on/off, light on/off/auto, and
-  pneumatic safety-sensor read as separate operations, plus a matching
-  RPi-side Rust client. Reusable facts to build on (confirmed by reading
+  page-separation fan on/off, turn-blower on/off, and light on/off/auto
+  as separate operations, plus a matching RPi-side Rust client. (BMP180
+  pressure commands are T21's scope, not this task's — same board and
+  protocol document, `monospace.md`, but tracked separately since they
+  were originally a separate RPi-direct task before AD-001's reversal.)
+  **Dropped (ijon, 2026-08-01): a pneumatic safety-sensor read is no
+  longer part of this task.** That was scoped for a possible future
+  rework replacing the page-separation fan/turn blower with compressed
+  air + solenoid valves — not pursued for now; see `architecture.md`
+  AD-001/AD-006 if it needs reconsidering later. Reusable facts to build
+  on (confirmed by reading
   the code, not assumed): the relay pin assignments and **active-low**
   polarity in `bookscanner.cpp` (`set_fan`/`set_vac_pump`/
   `set_blow_pump`/`set_lights` all invert the state), and
@@ -522,12 +648,49 @@ done here.
 - **Done when:** sending each new command type to the physically
   connected Arduino (running the newly designed firmware) produces the
   expected physical effect (vacuum engages, fan spins, blower engages,
-  light toggles/auto-mode works), and reading the pneumatic safety-sensor
-  pin reports correct real-world state.
+  light toggles/auto-mode works).
 - **Depends on:** Arduino wired and running (confirmed in place since
   2026-07-24/25, `docs/hardware/electronics.md`); new Arduino firmware
-  design/implementation (not yet started — this is now firmware work, not
-  just an RPi-side client, unlike the rest of HAL's tasks).
+  design/implementation — **done, see below**, no longer a blocker.
+- **Pulled forward (ijon, 2026-08-02, see `architecture.md` AD-007 for
+  the full reuse/alternatives reasoning):** the same `hw_diag` binary as
+  T21 above also gets the relay commands as its first deliverable,
+  ahead of full Stop-button/Auto-Scan integration.
+  - **Subcommands:** `vacuum on|off`, `fan on|off`, `blower on|off`,
+    `light on|off`, `all-off` — one-to-one with `monospace.md` §5, no
+    invented behavior beyond it.
+  - **Usage (SSH, once built):**
+    `./target/release/hw_diag --port /dev/ttyACM0 vacuum on` — this
+    physically energizes the pump exactly as typing `VACUUM ON` into a
+    raw serial terminal would; same physical-safety handling applies
+    (be present/aware before running it, don't script unattended
+    repeated actuator-on loops).
+  - **Branch/PR recommendation (not mandated):** this is a full wire-
+    protocol rewrite on the `monospace` side (binary → text-line, see
+    T22's scope above) plus a new binary on the `sans` side — prefer a
+    feature branch in each repo, PR against `master` once the new
+    protocol/CLI works end-to-end against real hardware, rather than
+    landing an in-progress rewrite directly on `master`. Direct-to-
+    `master` is ijon's call to make explicitly if preferred instead.
+  - **Not in scope for this pulled-forward slice:** wiring `hw_diag`'s
+    client code into the Auto-Scan Controller or Stop-button handling
+    (later work, full `sans-serif.md` integration), or turning derived
+    pressure thresholds into actual pickup-success/-failure decision
+    logic (T23). This slice produces the tool and the measurement data
+    only.
+  - **Done (2026-08-01/02):** landed via feature branches as
+    recommended above — `monospace` PR #2 → `master` (`17d547b`), `sans`
+    PR #6 → `master` (`beab768`). **"Done when" above is met:** all four
+    relay commands (`VACUUM`/`FAN`/`BLOWER`/`LIGHT` on/off, plus
+    `ALL OFF`) work against the physically connected Arduino via
+    `hw_diag`, and the relay→physical-actuator mapping was independently
+    verified and confirmed correct by ijon (2026-08-02) — matching
+    `monospace.md` §2's pin table (`VAC_PUMP`=D4, `PES_PUMP`=D5,
+    `LAMP`=D6, `FAN`=D7) exactly, no surprises. `LIGHT AUTO` remains
+    unimplemented, as specified (excluded from MVP, `monospace.md` §5).
+    **Not yet done, separate from this task:** Stop-button handling and
+    Auto-Scan integration (T24) — still application-level work this
+    slice deliberately didn't cover.
 
 ---
 
@@ -1147,21 +1310,46 @@ exactly the failure mode it's meant to prevent.
   stops short of the endstop without Arduino involvement; homing reliably
   establishes zero and gates every other absolute-position command.
 - **Depends on:** MKS ESP32 FOC board flashed with a working SimpleFOC
-  base (hardware bring-up tracked in `project-management/planning/
-  todo.md`, M2 — currently blocked on board repair/replacement after the
-  2026-07-25 burnout), endstop rewiring (`project-management/planning/
-  todo.md`, M2, new 2026-07-28 item), Kt calibration for the actual motor
-  if press force is to be expressed/tuned in Nm rather than raw Amps
-  (see `touchdown-motion-sketch.md`).
-- **Full requirements document (2026-07-29, condensed 2026-07-29):**
+  base (hardware bring-up status: last confirmed via
+  `project-management/planning/todo.md`/`docs/hardware/electronics.md`
+  §2.4 was "blocked on board repair/replacement after the 2026-07-25
+  burnout, motor not yet mechanically installed" — **re-verify with
+  ijon/hrmny before assuming this is still current, don't carry this
+  status forward blindly**, see `ligature-AGENTS.md`'s hardware-status
+  check), endstop rewiring (`project-management/planning/todo.md`, M2,
+  new 2026-07-28 item), Kt calibration for the actual motor if press
+  force is to be expressed/tuned in Nm rather than raw Amps (see
+  `touchdown-motion-sketch.md`).
+- **Full requirements document:** [`ligature.md`](ligature.md) —
+  **corrected 2026-08-02** (was pointing to
   [`reference/esp32-foc-firmware-requirements.md`](reference/esp32-foc-firmware-requirements.md)
-  — self-contained firmware spec (motor/board parameters, GPIO map, the
-  binding "motor never moves without an explicit host command" safety
-  requirement, and the mm/force unit-conversion + calibration requirement,
-  §4, that this task's press-force and scan-position targets consume).
-  That document's Milestone 1 (a safe demo/jog firmware, no real
-  page-turning) is scoped narrower than this task — T32 itself corresponds
-  to that document's §6 "Milestone 2 (Productive)".
+  as primary; that document predates `ligature.md` and was superseded
+  by it for protocol matters at AD-006, `architecture.md` — still useful
+  for hardware-only detail, GPIO map/connector pinouts/open
+  hardware-verification items, not for the command protocol itself).
+  Includes the full command set (motor/board parameters via the
+  reference doc, protocol via `ligature.md` itself), the binding
+  "motor never moves without an explicit host command" safety
+  requirement plus the `M112`/`M53`/`Fault` distinction (§3.8), the
+  mm/force calibration requirement (§8), and telemetry (§12, including
+  the `status` heartbeat and `Probing` state T32's implementation needs
+  to actually emit). `reference/esp32-foc-firmware-requirements.md`'s
+  Milestone 1 (a safe demo/jog firmware, no real page-turning) is scoped
+  narrower than this task — T32 itself corresponds to that document's §6
+  "Milestone 2 (Productive)". Working conventions for whoever picks this
+  up (deployment, safety, code reuse, build/run): `ligature-AGENTS.md`
+  — that file intentionally does not carry status, see below instead.
+
+**Bring-up sequence and current status: `ligature.md` §17 (2026-08-05 —
+moved there so it travels with the file that's self-contained; don't
+duplicate it here, update it there).** Short version for this task list:
+Stage 1a (old board, phases disconnected) appears complete; Stage 1b
+(current-limited alignment + closed-loop current sensing) is mostly
+validated but blocked on an unresolved amplifier-gain question and a
+real, unresolved closed-loop motion problem (overspeed/roughness) found
+by the `motor-smoke` diagnostic firmware; Stage 2 (mechanically
+installed) hasn't started. No protocol-firmware implementation work has
+begun yet — only ad-hoc bring-up/diagnostic firmware exists so far.
 
 **Resolved (ijon, 2026-07-26): UI language.** MVP is **English-only**.
 Dual-language (German + English) is a planned later addition, not MVP
@@ -1169,3 +1357,98 @@ scope — worth keeping in mind for T30/T31's implementation (e.g. avoid
 baking English strings in as literals with no extraction point, so
 adding German later isn't a rewrite), but no localization
 infrastructure is being built now.
+
+---
+
+## AD-009: Start/Stop/E-Stop Button + Status LED
+
+Full background/reasoning: `architecture.md` AD-009. Physical part:
+`docs/hardware/electronics.md` §3.3.
+
+#### T34 — Button + status-LED firmware (Arduino-side) — done (2026-08-08)
+
+- **Done (`monospace` PR #5, `63077d9`, merged 2026-08-08):**
+  implemented and verified on real hardware exactly per scope below —
+  see `monospace.md` §10 for the authoritative status/detail, not
+  duplicated further here.
+- **Scope:** implement `monospace.md` §10 on the physical Arduino:
+  debounced button-press detection on D2 (`EVENT BUTTON PRESSED`,
+  §10.2), and the `LED SET <r> <g> <b>` command driving D9/D10/D11
+  (§10.3). Includes the two new safety points from §3 (LED boots off,
+  no exception; debounce is signal conditioning, not a third automatic
+  mode). Does **not** include deciding what any color/pattern means, or
+  interpreting what a button press should do — that's T35's scope
+  entirely; this task only implements the wire-level contract.
+- **Done when:** on the physically connected Arduino, (a) sending
+  several `LED SET <r> <g> <b>` values via `arduino-cli monitor`
+  produces the expected visible color/brightness, active-low as
+  confirmed (§10.3 — `0`=off/`255`=full on from the host's point of
+  view, inverted internally before `analogWrite`); (b) pressing the
+  physical button, including deliberately sloppy/bouncy presses,
+  produces exactly one `EVENT BUTTON PRESSED` line per physical press,
+  never zero, never several; (c) the LED is confirmed off immediately
+  after a fresh power-up/flash, before any `LED SET` has been sent.
+- **Depends on:** physical wiring of the button per the pin table in
+  `docs/hardware/electronics.md` §3.3 (not yet done). **No longer
+  blocked on polarity** — the diode test (ijon, 2026-08-08) confirmed
+  `C` = common anode, so R/G/B are active-low; that was the only
+  previously-open prerequisite.
+- **Full requirements:** [`monospace.md`](monospace.md) §2 (pin table),
+  §3 (safety points 7/8), §4/§5 (protocol), §10 (full button/LED spec).
+
+#### T35 — RPi Arduino-client additions + status-indicator/button-routing logic — part (a) done, part (b) not started
+
+- **Part (a) done (`sans` PR #7, `4d8cdfa`, merged 2026-08-08):** the
+  Rust Arduino client and `hw_diag` extension, verified end to end
+  against the real `monospace` PR #5 firmware. Part (b) — the actual
+  application-level indicator/button-routing component — has **not**
+  been started; it depends on the broader `sans-serif` application
+  (Auto-Scan loop, UI screen state, §1.1/§5.3/§8) existing to read state
+  from, which itself isn't built yet. Don't infer that this task is done
+  from part (a)'s completion.
+- **Scope:** two things, both RPi-side, no firmware counterpart (unlike
+  T20/T21/T22's split, there's no third file here — see the
+  Board/component mapping notes above). **(a) Done:** extend the Rust
+  Arduino client (`sans-serif.md` §1.2) with `set_led(r, g, b)` and the
+  `on_button_press`-equivalent (shipped as `on_event`) callback, plus
+  the `protocol::classify_line` addition recognizing the `EVENT ` prefix
+  alongside the existing `PRESS ` one. **(b) Not started:** build the
+  status-indicator/button-routing component itself (`sans-serif.md`
+  §11): the state→color/pattern table (§11.1), the blink-timer loop,
+  and the button-press interpretation (§11.2) wired into the existing
+  Stop path (§5.3, already updated to accept this as a third trigger),
+  the existing Start action (§8.1 step 7, already updated to accept
+  this as an alternate trigger), and the "New job" entry point (§8.1
+  steps 1–2) for a Blue-state press.
+- **Done when:** on the real machine, moving through the happy-path
+  screen flow (§8.1) shows the button transition Blue → Green → Amber
+  → (Blue again at job end) at the right points, matching §11.1's
+  table, with Amber correctly appearing for *every* automatic move
+  (homing, calibration, Auto-Scan, move-to-top, jog — not just
+  Auto-Scan); pressing the physical button while Blue and genuinely
+  idle starts a new job exactly like the touchscreen entry point;
+  pressing it while Green starts Auto-Scan exactly like tapping the
+  touchscreen [Start]; pressing it while Amber stops exactly like
+  tapping [Stop] (`stop()` + `all_off()`, §5.3); triggering a Stop, a
+  3-failure abort, and (if reproducible) an unsolicited FOC fault each
+  show the correct one of the two red patterns (§11.1); a press during
+  either red state has no effect; a press while Blue but mid-job
+  (cover/ISBN/metadata/calibration-setup screens) has no effect (§11.2's
+  working assumption — confirm this is actually what ijon wants while
+  implementing, it wasn't separately confirmed when the Blue=new-job
+  answer was given).
+- **Depends on:** T34 (needs the firmware's `LED SET`/`EVENT BUTTON
+  PRESSED` actually working on real hardware first); the FOC client's
+  `status()`/fault stream (§1.1, T20) and the Auto-Scan loop driver
+  (§5.3, T24) for the state this component reads.
+- **Open points from `architecture.md` AD-009, not yet resolved —
+  check with ijon before finalizing this task's implementation, don't
+  silently pick an answer:** the exact blink frequencies (1 Hz/4–5 Hz
+  are proposals, not measured/tuned values — fine to start with,
+  revisit once someone's actually looked at it running on the machine);
+  the §11.2 working assumption above (Blue=new-job only applies at
+  genuine idle, not mid-job) — resolved-by-assumption, not by ijon
+  directly, worth a quick confirm before or during implementation.
+- **Full requirements:** [`sans-serif.md`](sans-serif.md) §1.2 (client
+  additions), §11 (indicator/button logic), §5.3 and §8.1 step 7 (the
+  two integration points).

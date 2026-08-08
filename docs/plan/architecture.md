@@ -18,16 +18,39 @@
   2026-07-01), war also als in sich geschlossenes Ein-Geräte-System
   gedacht, nicht aufgeteilt in Maschine+VM. SW0 reduziert sich damit auf
   eine einzige Frage: Womit bauen wir die Maschinen-Software?
-  - **Hardware-Entscheidung (ijon, 2026-07-26): BMP180-Drucksensor
-    wandert an den RPi (direkt), Arduino gibt ihn ab.** War aktuell am
-    Arduino (physisch so verkabelt seit 2026-07-25); hrmny hatte
-    RPi-direkt vorgeschlagen, ijon war es egal — mit der
-    software-architektonischen Begründung unten jetzt final so
-    entschieden, nicht mehr offen. MKS-ESP32-FOC-Treiber hängt ebenfalls
-    direkt am RPi. **Für PM-Seite nachzutragen:** diese Umverkabelung
-    gehört in `project-management/decisions.md`/`todo.md` (M2) —
-    dortiger Stand ("BMP180 an Arduino-Pins A4/A5") ist damit überholt;
-    trage ich hier nicht selbst ein, das ist PM-Modus-Territorium.
+  - ~~**Hardware-Entscheidung (ijon, 2026-07-26): BMP180-Drucksensor
+    wandert an den RPi (direkt), Arduino gibt ihn ab.**~~ **Zurückgenommen
+    (ijon, 2026-08-01): BMP180 bleibt am Arduino.** Begründung: der
+    Arduino hat sonst kaum Aufgaben (nur Relais/BOX-LIGHT-FLIP-Protokoll,
+    s.u.), eine Umverkabelung würde sich kaum lohnen — und physisch ist
+    er ohnehin schon dort angeschlossen (A4/A5, seit 2026-07-25), nie
+    umgesteckt worden. **Für die PM-Seite ergibt sich daraus nichts
+    nachzutragen** — der dortige Stand (`project-management/todo.md`,
+    Eintrag "Drucksensor (BMP180, A8) angeschlossen") beschrieb ohnehin
+    nur die physische Verkabelung, nie einen Umzugsplan; die
+    ursprüngliche "für PM-Seite nachzutragen"-Notiz unten war also
+    gegenstandslos, bevor sie umgesetzt wurde. MKS-ESP32-FOC-Treiber
+    bleibt unverändert direkt am RPi, davon nicht betroffen. **Neue
+    Konsequenz für die Pickup-Erkennung** (die exakt die Begründung
+    unten war, RPi-direkt zu wählen): die Cross-Device-
+    Korrelationsfrage, die durch RPi-direkt vermieden werden sollte, ist
+    damit wieder da — gelöst über ein Zwei-Modi-Protokoll (`PRESS?`
+    Einzelmessung, `PRESS START`/`STOP` kontinuierliches Streaming, RPi
+    entscheidet je nach Bedarf) statt eines eigenen I2C-Treibers am RPi.
+    Volle Protokoll-/Client-Spezifikation: `monospace.md` §5/§6,
+    `sans-serif.md` §1.2 (inkl. Korrelations-Hinweis dort). Nebeneffekt:
+    der in `monospace` bereits vorbereitete SFE_BMP180-Treiber (unten als
+    "wird ungenutzt" abgeschrieben) wird jetzt doch weiterverwendet —
+    passt zu ijons Wiederverwendungs-Präferenz (`CLAUDE.md` Abschnitt
+    2.2). Offene Punkte (BMP180-Abtastrate, Sample-Anzahl pro
+    gemittelter Messung, erreichbare Streaming-Rate) sind unten in
+    `monospace.md` §6 als empirisch zu klärend vermerkt, nicht hier
+    dupliziert.
+  - *(Ursprüngliche, jetzt zurückgenommene Begründung, zur Historie
+    stehengelassen):* War aktuell am Arduino (physisch so verkabelt seit
+    2026-07-25); hrmny hatte RPi-direkt vorgeschlagen, ijon war es egal
+    — mit der software-architektonischen Begründung unten damals final
+    so entschieden. MKS-ESP32-FOC-Treiber hängt weiterhin direkt am RPi.
   - **Begründung (Timing-Korrelation der Pickup-Fehlererkennung):**
     Die Pickup-Fehlererkennung läuft auf **jeder einzelnen Seite
     während des gesamten Auto-Scan-Loops** (`scan-process.md`, Schritt
@@ -64,7 +87,12 @@
     mit — keine Cross-Device-Korrelation nötig. Kosten: `monospace`s
     fertiger SFE_BMP180-Treiber wird ungenutzt, RPi-seitig braucht es
     einen eigenen, aber einfachen I2C-Treiber (`smbus2`+BMP180-Auslesung
-    ist Standard-RPi-Python-Terrain, geringer Aufwand). Arduino bleibt
+    ist Standard-RPi-Python-Terrain, geringer Aufwand). **Korrektur
+    (ijon, 2026-08-01): dieser Kostenpunkt gilt nicht mehr** — BMP180
+    bleibt am Arduino (Rücknahme oben), der SFE_BMP180-Treiber wird also
+    doch weiterverwendet, kein neuer RPi-seitiger I2C-Treiber nötig.
+    Betrifft nur den BMP180-Teil dieser Begründung — die RPi-direkt-
+    Entscheidung fürs FOC-Board oben bleibt unverändert gültig. Arduino bleibt
     laut P1b-Endstand (2026-07-21) weiterhin zuständig für Relais und
     Pneumatik-Sicherheitssensor. **Korrektur (2026-07-29): der Endstop
     zählt hier nicht mehr dazu** — er wanderte am 2026-07-28 vom Arduino
@@ -76,7 +104,20 @@
     war hier zu fest als bereits zugewiesene Arduino-Zuständigkeit
     dargestellt — tatsächlich ist er optional, nur relevant bei einem
     noch nicht beschlossenen Pneumatik-Umbau. Aktuell nicht im
-    Arduino-Protokoll (`monospace.md`).
+    Arduino-Protokoll (`monospace.md`). **Final (ijon, 2026-08-01): für
+    jetzt fallengelassen, keine Priorität.** Der Umbau (Trennfächer-/
+    Blower-Fan ersetzen durch Druckluft-Düsen + Magnetventile) wird für
+    die MVP-Phase nicht verfolgt — Ziel ist erstmal, die Maschine mit den
+    vorhandenen Fans/Blowern zum Laufen zu bringen. Der Sensor (ein
+    separates analoges Bauteil mit eigenem I2C-ADC, z.B. ADS1115 — nicht
+    zu verwechseln mit dem BMP180, der als eigenständiger I2C-Sensor
+    innerhalb der Saugbox sitzt und unverändert am Arduino bleibt, s.o.)
+    ist damit aus allen MVP-Zielzustandsdokumenten entfernt
+    (`monospace.md`, `sans-serif.md`, `tasks.md`,
+    `reference/z1-components.md`). Kann bei Bedarf wieder aufgenommen
+    werden, falls der Pneumatik-Umbau tatsächlich beschlossen wird — dann
+    hier und in den Zielzustandsdokumenten neu einzutragen, nicht aus
+    dieser Historie zu rekonstruieren.
 - **Alternativen:**
   - **(a) `alexandria` (Node.js/Moleculer/NATS + React/Preact-Frontend)**
     komplett übernehmen und anpassen.
@@ -127,9 +168,9 @@
     nicht, kein Baustein bietet einen Vorsprung, den `sans`/`monospace`
     nicht auch hätten).
   - **`monospace` bleibt Basis für den Arduino-Teil** — aber nur für das,
-    was der Arduino nach P1b tatsächlich noch behält (Relais,
-    Pneumatik-Sicherheitssensor, BOX/LIGHT/FLIP-Protokoll — Endstop
-    inzwischen am ESP32, s.o.). Die alte
+    was der Arduino nach P1b tatsächlich noch behält (Relais, BMP180,
+    BOX/LIGHT/FLIP-Protokoll — Endstop inzwischen am ESP32, s.o.;
+    Pneumatik-Sicherheitssensor **gestrichen, 2026-08-01, s.o.**). Die alte
     Stepper-Motor-Ansteuerung in `monospace` wird **nicht** mitgenommen
     — die ist durch das FOC-Board (T20, eigenes neues Protokoll)
     ohnehin überholt, wie in der Bestandsaufnahme oben schon
@@ -474,7 +515,7 @@
 - **Entscheidung:**
   1. Drei eigenständige, historienfreie Zielzustands-Spezifikationen auf
      oberster Ebene (analog zu `tasks.md`/`architecture.md`), je eine pro
-     Board: [`bldc-driver.md`](bldc-driver.md) (MKS ESP32 FOC),
+     Board: [`ligature.md`](ligature.md) (MKS ESP32 FOC),
      [`monospace.md`](monospace.md) (Arduino), [`sans-serif.md`](sans-serif.md)
      (Raspberry Pi, Backend+UI zusammen). `tasks.md` bleibt für
      Detail-Historie/Aufgabenschnitt bestehen, jetzt mit einer
@@ -502,7 +543,7 @@
      Vollständige Kommandotabelle inkl. Antwort-Framing
      (`ok`/`done`/`error`, unsolicited `fault`) und durchgerechnetes
      Beispiel eines vollständigen Jobs:
-     [`bldc-driver.md`](bldc-driver.md) §4–§10, §14.
+     [`ligature.md`](ligature.md) §4–§10, §14.
   3. **`G73` neu gefasst (2026-07-31, nach zwei Rückmeldungsrunden von
      ijon — korrigiert zwei zu enge Fassungen von Claude nacheinander:
      erst nur die kleine −10%-Wiggle-Bewegung, dann fälschlich erst
@@ -517,13 +558,30 @@
      der aktuellen Position absteigt.
      **Pickup-Prüfung (ijon, 2026-07-31): kein eigenes G-Code-Kommando
      nötig, das FOC-Board kennt "Pickup-Erfolg" gar nicht** — der RPi
-     liest den Differenzdruck (eigener Sensor, nicht am Board) parallel
-     während `G73` bereits läuft; bei Erfolg passiert nichts (die
+     liest den Differenzdruck ~~(eigener Sensor, nicht am Board)~~
+     **Korrektur (ijon, 2026-08-01, siehe AD-001): der Drucksensor bleibt
+     doch am Arduino, nicht am RPi direkt** — der RPi bezieht den
+     Differenzdruck während `G73` über ein kontinuierliches
+     Streaming-Kommando vom Arduino (`monospace.md` §5/§6,
+     `sans-serif.md` §1.2), nicht mehr über eine eigene I2C-Messung. Der
+     Grundmechanismus unten (RPi überwacht selbst, FOC-Board weiß von
+     nichts, Abbruch+frisches `G30` bei Fehlschlag) bleibt unverändert —
+     nur die Quelle des Druckwerts ist jetzt eine zweite serielle
+     Verbindung (Arduino) statt eines RPi-lokalen I2C-Reads, mit dem
+     entsprechenden Korrelations-Hinweis in `sans-serif.md` §1.2. Läuft
+     parallel während `G73` bereits läuft; bei Erfolg passiert nichts (die
      Bewegung läuft einfach weiter), bei Fehlschlag bricht der RPi die
-     laufende `G73`-Bewegung per `M112` ab und sendet danach ein
-     frisches `G30` für den nächsten Versuch — unabhängig davon, wo
-     genau der Abbruch die Box stehen lässt. Exakte Prüf-Position/-Zeit
-     innerhalb der Bewegung ist nicht festgelegt. Während `G73` läuft,
+     laufende `G73`-Bewegung ab und sendet danach ein frisches `G30` für
+     den nächsten Versuch — unabhängig davon, wo genau der Abbruch die
+     Box stehen lässt. **Korrektur (ijon, 2026-08-02, siehe `ligature.md`
+     §3.8/§6.2):** der Abbruch hier ist **`M53`, nicht `M112`** — `M112`
+     ist jetzt ausschließlich echter Not-Halt (entwaffnet, verriegelt
+     `Fault`, braucht `M999`+`M3` zur Freigabe), `M53` ist der Routine-
+     Abbruch für genau diesen Fehlschlag-Fall (stoppt nur, bleibt armiert/
+     homed, kein Fault). Diese Textstelle beschrieb ursprünglich denselben
+     `M112`-für-beides-Fehler, den `ligature.md` selbst mittlerweile
+     korrigiert hat — hier nachgezogen, nicht nur dort. Exakte
+     Prüf-Position/-Zeit innerhalb der Bewegung ist nicht festgelegt. Während `G73` läuft,
      pollt der RPi `?` außerdem fortlaufend, um Arduino-Relais (Blower
      ab ~80%, Trennfächer/Vakuum-Timing) selbst zeitlich zu steuern —
      das FOC-Board bleibt dabei ohne jede Kenntnis vom Arduino-Zustand
@@ -544,7 +602,7 @@
      harter Zielpunkt) / `M51 T<Limit>` (Torque-based, dieselbe
      Velocity+Current-Limit-Mechanik wie Touchdown, generalisiert auf
      beliebige Moves, nachgiebig bei Widerstand). Begründung:
-     [`bldc-driver.md`](bldc-driver.md) §11.
+     [`ligature.md`](ligature.md) §11.
 - **Alternativen:**
   - **Rohes `Commander`-Kommandoset ohne G-Code-Anlehnung** (z.B.
     JSON-Zeilen oder eigene Binärframes) — verworfen (hrmny/ijon,
@@ -561,21 +619,372 @@
 - **Konsequenzen:**
   - `esp32-foc-firmware-requirements.md` §7 ("Protokoll noch nicht
     festgelegt") ist durch diese Entscheidung überholt — Pointer auf
-    `bldc-driver.md` ergänzt, Inhalt dort nicht dupliziert.
+    `ligature.md` ergänzt, Inhalt dort nicht dupliziert.
   - T20 (`tasks.md`) zerfällt sauberer in zwei Teile: das
-    Protokoll-Design selbst ist jetzt in `bldc-driver.md` festgehalten,
+    Protokoll-Design selbst ist jetzt in `ligature.md` festgehalten,
     T20 beschreibt weiterhin den RPi-seitigen Client dagegen (jetzt in
     `sans-serif.md` §1.1 zielzustand-spezifiziert).
   - Der Drive-Mode-Vorschlag (Punkt 5 oben) ist **nicht** final — vor
     Firmware-Implementierung von `M50`/`M51` mit hrmny/ijon zu
     bestätigen.
-  - **Pneumatik-Drucksensor am Arduino ist optional, nicht entschieden
-    (ijon, 2026-07-31) — korrigiert eine zu feste Annahme in AD-001**
-    (dort als bereits zugewiesene Arduino-Zuständigkeit gelistet,
-    Zeilen "Pneumatik-Sicherheitssensor"): der Sensor existiert nur,
-    falls ein noch nicht beschlossener Pneumatik-Umbau stattfindet
-    (Blower-Fan/Flutter-Fan ersetzt durch Druckluft + pneumatische
-    Ventile). Bis dahin ausgeklammert — `monospace.md` führt ihn nicht
-    im aktuellen Protokoll, siehe dort §7 für den Status.
+  - ~~**Pneumatik-Drucksensor am Arduino ist optional, nicht entschieden
+    (ijon, 2026-07-31)**~~ — **final gestrichen (ijon, 2026-08-01, siehe
+    AD-001):** keine Priorität für die MVP-Phase, aus allen
+    Zielzustandsdokumenten entfernt (`monospace.md` enthält dazu jetzt
+    gar nichts mehr, weder Protokoll noch Platzhalter-Abschnitt). Der
+    Sensor existierte nur als Idee für einen noch nicht beschlossenen
+    Pneumatik-Umbau (Blower-Fan/Trennfächer-Fan ersetzt durch Druckluft +
+    Magnetventile) — davon unabhängig ist und bleibt der BMP180 (eigener
+    I2C-Sensor in der Saugbox) am Arduino, siehe AD-001.
 - **Quelle:** Chat 2026-07-31 (dieses Gespräch); `esp32-foc-firmware-
   requirements.md`; `touchdown-motion-sketch.md`.
+
+---
+
+### AD-007: SSH-erreichbares Diagnose-Tool für Relais + BMP180 (Vorgriff auf T21/T22)
+
+> **Status: umgesetzt (2026-08-01/02).** Beide Repos wie unten entschieden
+> gebaut und gemergt — `monospace` PR #2 → `master` (`17d547b`, neues
+> Text-Protokoll, Steppercode entfernt) und `sans` PR #6 → `master`
+> (`beab768`, `hw_diag` als interaktive Session statt Ein-Kommando-CLI, s.
+> `monospace.md` §9.1). Auf echter Hardware getestet: `PRESS START`
+> erreicht ~49Hz bei Oversampling=2 (Ziel war ≥5Hz, ideal ≤50Hz — beides
+> erfüllt), Relais→Aktor-Zuordnung von ijon verifiziert. Erste echte
+> Druckmessdaten (3-Zustands-Modell) siehe
+> `docs/hardware/bmp180-vacuum-drop-test.md`. Details/Aufgaben-Status:
+> `tasks.md` T21/T22.
+
+- **Kontext:** Für die anstehende `monospace`-Firmware-Implementierung
+  auf dem RPi (siehe `monospace-AGENTS.md`) reicht ein reines
+  Firmware-Flash-und-Test-Zyklus nicht — ijon will am Ende dieses
+  Schritts per SSH auf den RPi zugreifen, ein Programm aufrufen und
+  damit (a) Druckwerte vom BMP180 live in der Konsole sehen und (b) alle
+  vier Relais schalten können. Zweck: Sensorfunktion validieren und auf
+  dieser Basis erste empirische Pickup-Success-Schwellwerte ableiten.
+  Das deckt sich mit den bereits bestehenden "Done when"-Kriterien von
+  T21/T22 (`tasks.md`) — dieses Tool ist im Kern ein Vorgriff auf einen
+  Teil dieser beiden Tasks, kein komplett neuer Scope.
+- **Geprüft — bestehender Code:**
+  - `sans-core::hardware` (`sans` Repo, `github.com/libreflip/sans`,
+    lokal unter `incoming/github/sans` einsehbar): `Hardware`-Struct
+    öffnet den seriellen Port (`serialport`-Crate), läuft in einem
+    eigenen Thread, Kommandos/Antworten laufen über Channels. **Aber:**
+    `protocol.rs`s `Command`/`Response`-Encoding ist fest an das *alte*
+    binäre 3-Kommando-Protokoll gekoppelt (`BOX`/`LIGHT`/`FLIP`,
+    2-Byte-Frames) — für das neue zeilenbasierte ASCII-Protokoll aus
+    `monospace.md` §4/§5 nicht verwendbar. Wiederverwendbar ist nur das
+    Transport-Skelett (Port öffnen, Thread, Channel-Pattern), nicht die
+    Protokoll-Logik selbst — bestätigt dieselbe Einschätzung, die T22
+    bereits für die RPi-seitige Client-Arbeit trifft.
+  - `sans-ctrl` (`sans` Repo, 29 Zeilen): reines `clap`-Argument-Parsing
+    für einen **anderen** Zweck (Fernsteuerung des `sans-server`-Daemons
+    — `status`/`jobs`/`do restart`/`do stop`), keine einzige Aktion
+    implementiert. Kein sinnvoller Ausgangspunkt für direkten
+    Hardware-Zugriff — das Tool redet mit einem (noch nicht
+    existierenden) Server-Prozess, nicht mit dem seriellen Port.
+  - `sans-core/src/bin/camcal.rs`: **wichtiger Präzedenzfall** — der
+    `sans`-Workspace hat bereits die Konvention, kleine
+    Diagnose-/Kalibrierungs-Programme als eigene Binaries unter
+    `sans-core/src/bin/` abzulegen (dort für die Kamera-Kalibrierung).
+    Ein neues Diagnose-Binary für Arduino-Relais/BMP180 fügt sich in
+    dasselbe, bereits etablierte Muster ein.
+  - `monospace/arduinofucker/arduinofucker.py` (`monospace` Repo, 57
+    Zeilen): interaktives Python-Menü-Tool über `pyserial`, mit
+    Hintergrund-Thread fürs Lesen — strukturell gut geeignet (das
+    Hintergrund-Lesen passt zum unaufgeforderten `PRESS <mbar>`-Zeilen
+    während `PRESS START`), aber sendet ebenfalls das *alte* binäre
+    Protokoll und müsste für das neue Protokoll komplett neu geschrieben
+    werden — de facto ein Parallel-Tool zum ohnehin für T21/T22 nötigen
+    Rust-Client, mit Risiko, dass beide auseinanderlaufen.
+- **Entscheidung:** Diagnose-Tool als neues Binary in `sans-core/src/bin/`
+  (Rust), das den für T21/T22 ohnehin zu bauenden RPi-seitigen
+  Protokoll-Client direkt nutzt/mit-entwickelt — kein separates
+  Parallel-Tool. CLI-Subcommands 1:1 nach `monospace.md` §5:
+  `press`, `press-stream` (mit optionalem CSV-Log, da genau das für die
+  Schwellwert-Ableitung gebraucht wird — bloßes Scrollen im Terminal
+  reicht dafür nicht), `vacuum on/off`, `fan on/off`, `blower on/off`,
+  `light on/off`, `all-off`. **Sofort verfügbarer Zwischenschritt ohne
+  jeden Code:** `arduino-cli monitor` (ohnehin Teil des
+  Firmware-Test-Workflows, `monospace.md` §8) funktioniert bereits als
+  roher serieller Terminal für einen ersten Konnektivitätstest, sobald
+  die Firmware geflasht ist — nutzbar, während das eigentliche Binary
+  noch gebaut wird.
+- **Alternativen:**
+  - **`arduinofucker.py` fürs neue Protokoll umschreiben** (ijons Plan
+    B) — zurückgestellt, nicht verworfen: bleibt Fallback, falls der
+    Rust-Weg ins Stocken gerät. Nicht Standardweg, weil er eine zweite,
+    parallele Implementierung desselben Protokolls bedeutet, die
+    getrennt von der echten T21/T22-Arbeit gepflegt werden müsste.
+  - **Nur `arduino-cli monitor`/`picocom`, kein eigenes Programm** —
+    verworfen als alleinige Lösung: erfüllt "Kommando tippen, Antwort
+    sehen", aber nicht die Schwellwert-Ableitung (keine Zeitstempel,
+    kein strukturiertes Log). Bleibt aber als kostenloser Sofort-Test
+    Teil des Workflows (siehe oben).
+  - **`sans-ctrl` ausbauen** — verworfen: falscher Zuschnitt, dafür
+    gedacht mit einem Server-Daemon zu reden, nicht mit dem seriellen
+    Port.
+- **Konsequenzen:**
+  - Zieht einen Teil von T21/T22 (RPi-seitiger Rust-Client für das neue
+    Protokoll) in diese RPi-Implementierungs-Session vor, statt es auf
+    später zu verschieben — `tasks.md` entsprechend ergänzt.
+  - `sans-core/Cargo.toml` pinnt `serialport = "3.2"` (2018er Stand) —
+    beim Bauen auf dem aktuellen RPi-Toolchain ggf. Versionsbump nötig;
+    das ist ein Update einer bereits akzeptierten Abhängigkeit, keine
+    neue Abhängigkeit, die erneute Freigabe bräuchte.
+  - Der neue Rust-Client ersetzt `sans-core::hardware/protocol.rs`
+    perspektivisch komplett (altes Binärprotokoll wird nirgendwo mehr
+    gebraucht) — das alte Modul kann beim Einbau des neuen entfernt
+    statt daneben stehen gelassen werden, sobald ijon das bestätigt.
+- **Quelle:** Chat 2026-08-02 (dieses Gespräch); `reference/
+  sans-code-reusability-review.md`; direkte Durchsicht von
+  `incoming/github/sans` und `incoming/github/monospace/arduinofucker`.
+
+---
+
+### AD-008: `ligature` (ESP32-FOC-Firmware) implementierungsreif vorbereitet
+
+- **Kontext:** ijon bat darum, `ligature.md` "auf dieselbe Weise"
+  vorzubereiten wie `monospace.md` zuvor — Lücken schließen, die eine
+  Umsetzungs-Session bräuchte, plus dazugehörige `AGENTS.md`. Anders als
+  bei `monospace` existiert hier **kein bestehendes LibreFlip-Repo** und
+  **keine bereits funktionierende Hardware** — das MKS-ESP32-FOC-Board ist
+  bei der ersten Inbetriebnahme durchgebrannt (`docs/hardware/
+  electronics.md` §2.4, 2026-07-25), ein Ersatzboard wurde bestellt, der
+  Motor ist mechanisch noch nicht eingebaut (Kollision mit der Blasdüse,
+  `project-management/risks.md` R4). Kein neuerer Stand dazu im Archiv
+  gefunden (Stand dieses Eintrags) — nicht angenommen, dass sich das seit
+  2026-07-30 geändert hat.
+- **Entscheidung:**
+  1. **Baudrate auf `115200` festgelegt** (`ligature.md` §4) — reine
+     Konsistenzentscheidung zur `monospace`-Baudrate, keine technische
+     Notwendigkeit von SimpleFOCs `Commander`.
+  2. **PlatformIO-Projektkonfiguration konkret ausformuliert**
+     (`ligature.md` §15), inkl. der über Websuche verifizierten,
+     nicht offensichtlichen `lib_archive = false`-Notwendigkeit für
+     SimpleFOC unter PlatformIO (Quelle: SimpleFOCs eigene Doku,
+     `docs.simplefoc.com/library_platformio`, plus
+     Community-Bestätigung) — ohne diese Zeile schlägt der Build
+     fehl, kein offensichtlicher Fehler, der sich schnell selbst
+     finden ließe.
+  3. **Diagnose-Tool: eigenes, separates Binary (`foc_diag`), keine
+     `hw_diag`-Erweiterung — korrigiert (ijon, 2026-08-02).**
+     Ursprünglich hier entschieden: `hw_diag` erweitern, analog zur
+     Wiederverwendungs-Logik aus AD-007. **Von ijon zurückgewiesen:**
+     `hw_diag` verwaltet genau eine serielle Verbindung mit genau einer
+     Protokoll-/Zustandslogik; eine Erweiterung auf eine zweite,
+     unabhängige Verbindung mit einer deutlich komplexeren
+     `Armed`/`Homed`/`Fault`-Zustandsmaschine wäre kein kleiner Zusatz,
+     sondern ein Umbau bereits funktionierenden Codes — "grenzwertig
+     bescheuert" (ijon). Zusätzlich: ein Testwerkzeug für den
+     BLDC-Treiber braucht ohnehin eine eigene, strengere Auslegung
+     (mehr Sicherheitsabfragen vor Arm-/Kalibrierbefehlen, prominente
+     Fault-Behandlung, siehe `ligature.md` §16.1) statt einfach
+     `hw_diag`s Design zu übernehmen. Neues Binary `foc_diag`
+     (`sans-core/src/bin/foc_diag.rs`), eigenständig, aber im selben
+     Crate wie `hw_diag`/`camcal.rs` — Wiederverwendung bleibt auf
+     Projektstruktur-Ebene, nicht auf Code-Ebene zwischen den beiden
+     Boards.
+  4. **Kein Repo eigenmächtig angelegt** — da keines existiert, wird das
+     im `AGENTS.md`-Begleitdokument explizit als Rückfrage an ijon
+     markiert, nicht selbst entschieden.
+  5. **Verbindliche Sicherheits-Vorbedingung ergänzt** (`ligature-
+     AGENTS.md`): jede Umsetzungs-Session muss den *aktuellen* physischen
+     Hardware-Stand (Ersatzboard verbaut? Motor mechanisch montiert?
+     Verkabelung passend zu §2?) bei ijon/hrmny erfragen, bevor
+     irgendetwas geflasht oder der Motor scharfgeschaltet wird — nicht
+     aus der Existenz dieses Dokuments auf Testbereitschaft schließen.
+     Deutlich strenger formuliert als bei `monospace`, weil dieses Board
+     bereits einmal real durchgebrannt ist.
+- **Alternativen:**
+  - **Physischen Hardware-Stand selbst annehmen/schätzen** — verworfen:
+    genau der Fehlertyp, vor dem die eigene Memory-Lektion dieser Sitzung
+    warnt (volatile Fakten nicht ungeprüft fortschreiben). Stattdessen:
+    Doku so gestalten, dass jede künftige Session selbst nachfragen
+    *muss*, statt einen möglicherweise veralteten Stand zu erben.
+  - **`hw_diag` erweitern statt eines separaten Tools** — ursprünglich
+    hier gewählt (Analogie zu AD-007), von ijon nach genauerem
+    Hinsehen verworfen: die Analogie trägt nicht, weil AD-007s
+    Wiederverwendungsargument (ein Board, ein Protokoll, ein
+    Betriebsmodell) hier nicht zutrifft — zwei Boards, zwei Protokolle,
+    zwei Zustandsmaschinen. Aufwand für die Verallgemeinerung wäre real,
+    nicht nur ein zusätzlicher `match`-Zweig.
+- **Konsequenzen:**
+  - `ligature.md` ist jetzt (Protokoll/Baudrate/Toolchain) vollständig
+    genug, um eine Umsetzungs-Session zu starten, **sobald die Hardware
+    tatsächlich bereitsteht** — das Dokument selbst kann diese
+    Voraussetzung nicht herstellen.
+  - `ligature-AGENTS.md` neu angelegt, Muster identisch zu
+    `monospace-AGENTS.md` (zwei Dateien reichen zur Umsetzungs-Session,
+    keine weiteren Planungsdateien).
+  - T20/T32 (`tasks.md`) unverändert gelassen — deren "Depends on"-Zeilen
+    zum Board-Bring-up sind ohnehin schon korrekt als offen/blockiert
+    markiert, keine Korrektur nötig, nur die neuen Dateien ergänzen das.
+- **Quelle:** Chat 2026-08-02 (dieses Gespräch); `docs.simplefoc.com/library_platformio`;
+  `docs/hardware/electronics.md` §2.4; `project-management/risks.md` R4.
+
+---
+
+### AD-009: Start/Stop/Not-Halt-Taster — RGB-Farbschema, Blinkmuster, Tasten-Semantik
+
+- **Kontext:** Neuer 16mm-RGB-Taster eingetroffen (tastend, nicht
+  rastend), an den Arduino angeschlossen — Pinbelegung/Typenschild-
+  Daten: `docs/hardware/electronics.md` §3.3. ijon hat den Grund-Split
+  bereits vorgegeben (Chat, 2026-08-07): der Arduino reicht
+  Tastendruck-Events roh an den RPi durch; **Farbe und Blinkmuster
+  liefert der RPi**, nicht die Firmware — das ist konsistent mit der
+  bereits etablierten "dummes Board"-Philosophie dieser Firmware
+  (`monospace.md` §3 Punkt 2: keine eigenständige Zeitsteuerung/Automatik
+  außer zwei explizit genehmigten Ausnahmen, zu denen dieser Taster
+  nicht gehört). Der Taster ist ein **kombinierter** Start/Stop/Not-Halt-
+  Taster — seine Bedeutung ändert sich je nach Maschinenzustand, was per
+  Farbe/Blinkmuster kommuniziert werden muss. Vorgabe von ijon: Blau =
+  Standby, Grün = bereit für Auto-Scan, während Auto-Scan = Stop-Taste
+  (Farbe offen, Empfehlung erbeten), gestoppt/Fehler = Rot oder Rot
+  blinkend in unterschiedlichen Mustern (Empfehlung erbeten). Bereits
+  bestehender, bindender Grundsatz in `sans-serif.md` §5.3: Recovery
+  von einem echten Stop darf **nie eine einzelne reflexartige Aktion**
+  sein (zwei getrennte Aufrufe, `clear_fault()` dann `arm()`) — jede
+  Tasten-Semantik hier muss sich daran halten, nicht daran vorbei
+  entwerfen.
+- **Entscheidung (Empfehlung, Bestätigung durch ijon ausstehend):**
+  1. **Split bestätigt:** Arduino meldet debounced `EVENT BUTTON
+     PRESSED` (reine Signalaufbereitung, keine automatische Aktion);
+     RPi sendet `LED SET <r> <g> <b>`, auch für Blinken (RPi schickt
+     wiederholt An/Aus im gewünschten Takt) — keine Blink-Logik auf dem
+     Arduino.
+  2. **Farb-/Zustandstabelle:**
+
+     | Zustand | Farbe | Muster | Tastendruck bewirkt |
+     |---|---|---|---|
+     | Standby (`sans-serif.md` §8.1, außerhalb aktiver Bewegung) | Blau | Dauerlicht | **Neuer Job** (s. Punkt 3, ijon 2026-08-08) |
+     | Bereit für Auto-Scan (§8.1 Schritt 7, „Ready to scan?") | Grün | Dauerlicht | Start (= Touchscreen-[Start]) |
+     | Automatische Bewegung — jede vom Host kommandierte Bewegung, nicht nur Auto-Scan (s. Punkt 2a, ijon 2026-08-08) | Amber/Orange | Dauerlicht | Stop (= Touchscreen-[Stop], `stop()`+`all_off()`) |
+     | Gestoppt, erwartet (User-Stop oder 3-Fehlversuche-Abbruch, Recovery-Screen §8.2.3) | Rot | langsam blinkend (~1 Hz, Vorschlag) | kein Effekt — Recovery bewusst nur über Touchscreen |
+     | Gestoppt, unerwarteter Fault (unsolicited `fault ...` vom FOC-Board) | Rot | schnell blinkend (~4–5 Hz, Vorschlag) | kein Effekt, wie oben |
+
+     Begründung Amber für „aktive Bewegung": folgt der in der
+     Maschinensicherheit gebräuchlichen Konvention (sinngemäß IEC
+     60204-1 Tabelle 5 / IEC 60447 für Drucktasterfarben: Rot=Stop/
+     Gefahr, Grün=Start/sicherer Zustand, Gelb/Amber=Achtung/Prozess
+     läuft, Blau=Hinweis/sonstige Funktion — Zusammenfassung aus
+     allgemeinem Fachwissen, nicht gegen den Normtext im Detail
+     geprüft, s. Quelle unten). Amber ist von Grün (bereit) und Rot
+     (gestoppt/Fehler) eindeutig unterscheidbar und liest sich
+     international als „läuft gerade, Vorsicht" — passt zur
+     Zielgruppe „Laien ohne Einweisung" (`sans-serif.md` §0). Zwei
+     Rot-Varianten machen sichtbar, ob ein Stop „erwartet" oder ein
+     echter Fault war, ohne die Steuerungslogik zu ändern (beide landen
+     weiter im selben Recovery-Screen, §5.3) — berührt die dort offene,
+     nicht entschiedene Frage, ob 3-Fehlversuche-Abbruch/Stop/Fault
+     dieselbe Kategorie sind, löst sie nicht auf, liefert aber am
+     Indikator eine Unterscheidung.
+
+     **2a. Geklärt (ijon, 2026-08-08): „immer Amber, wenn die Maschine
+     sich automatisch bewegt"** — bewusst weiter gefasst als der
+     ursprüngliche Vorschlag (nur Auto-Scan + Kalibrierung). Amber gilt
+     jedes Mal, wenn eine vom Host kommandierte Bewegung läuft: Homing
+     beim Job-Start (§8.1 Schritt 1), Kalibrierungs-Touchdown/-Aufstieg
+     (§4), jeder Auto-Scan-Zyklus (§8.1 Schritt 8), `move_to_top()`
+     (Job-Ende-Parken, Recovery-Screen §8.2.3) und Jog-Bewegungen
+     (§8.2.3 „[Move down]"). Technisch am saubersten darüber
+     abzuleiten, dass der FOC-Client (§1.1) `status().state` gerade
+     `Moving` oder `Probing` meldet, plus „Auto-Scan-Screen aktiv" als
+     Sonderfall (deckt die kurzen Pausen zwischen einzelnen Bewegungen
+     *innerhalb* eines Auto-Scan-Zyklus ab, die sonst als kurzes
+     Amber→Grün→Amber-Flackern sichtbar würden). **Kleiner, nicht bei
+     ijon einzeln nachgefragter Rest-Punkt:** Momente, in denen Vakuum/
+     Gebläse bereits aktiv sind, aber die Box selbst noch stillsteht
+     (z.B. kurz nach Vakuum-Einschalten, vor dem eigentlichen Abheben),
+     zählen hier ebenfalls als Amber, weil sie in dieselbe „nicht
+     anfassen"-Gefahrenklasse fallen wie die Bewegung selbst — passt zum
+     bereits bestehenden Sicherheits-Grundsatz in `sans-serif.md` §5.1,
+     der Vakuum und Bewegung ohnehin gekoppelt behandelt.
+  3. **Tasten-Semantik — geklärt (ijon, 2026-08-08):**
+     - **Amber-Zustand:** Taste = Stop, immer, hat Vorrang vor jeder
+       anderen Interpretation (das „Not-Halt"-Verhalten).
+     - **Grün-Zustand:** Taste = Start.
+     - **Blau-Zustand: Taste = „Neuer Job"** — löst denselben Ablauf
+       aus, der auch beim Touchscreen-Einstieg in einen neuen Job
+       passiert (Homing falls noch nicht gehomed, sonst direkt weiter
+       zur Cover-Aufnahme, §8.1 Schritte 1–2). **Arbeitsannahme, nicht
+       einzeln bei ijon nachgefragt:** gilt für den *echten* Leerlauf
+       (vor dem allerersten Job oder nach Abschluss/Upload eines
+       vorigen Jobs) — innerhalb eines bereits laufenden Jobs, während
+       einer der Zwischenschritt-Screens (Cover/ISBN/Metadaten/
+       Kalibrierungs-Vorbereitung, ebenfalls „Blau"), bleibt ein Druck
+       ohne Effekt, weil „neuer Job" dort keine sichere, eindeutige
+       Bedeutung hätte (welcher der beiden Jobs wäre gemeint?) und
+       diese Screens ohnehin eigene, passgenaue Touchscreen-
+       Bestätigungen haben. Falls ijon das anders meint (z.B. Druck
+       bricht den aktuellen Job ab und startet neu), bitte korrigieren
+       — nicht als Fehlinterpretation stillschweigend weitergetragen.
+     - **Rot-Zustand:** weiterhin bewusst **kein** Effekt bei
+       Tastendruck — Recovery bleibt zweistufig über den Touchscreen,
+       siehe Kontext oben. Nicht Teil der 2026-08-08-Klärung, unverändert.
+  4. **Boot-Zustand vor RPi-Verbindung:** LED aus (kein Kanal aktiv),
+     bis die erste `LED SET`-Nachricht vom RPi kommt — analog zur
+     bestehenden Regel „kein Aktor beim Boot aktiv" (`monospace.md` §3
+     Punkt 1), auch wenn die LED kein sicherheitskritischer Aktor ist.
+  5. **LED-Ansteuerung: aktiv-low, geklärt (ijon, Diodentest,
+     2026-08-08).** War keine freie Design-Entscheidung, sondern durch
+     die tatsächliche Innenverschaltung des Bauteils festgelegt — siehe
+     `docs/hardware/electronics.md` §3.3 für die Messung. Ergebnis: C
+     ist die Sammel-Anode (an 5V), R/G/B sind Kathoden → R/G/B-Pins am
+     Arduino werden **aktiv-low** angesteuert (Pin LOW = jeweilige
+     Farbe an), damit dieselbe Konvention wie bei den vier Relais
+     (`monospace.md` §2). Der Taster-Eingang ist davon unabhängig
+     (eigene, freie Pull-up/Pull-down-Wahl, ebenfalls aktiv-low gewählt,
+     s. dort).
+- **Alternativen (erwogen, verworfen):**
+  - **Blink-Muster fest auf dem Arduino kodieren** (z.B. `LED MODE
+    ERROR_SLOW` statt roher RGB-Werte) — verworfen: bricht mit der
+    zentralen Firmware-Prämisse „nie eigenständige Zeitsteuerung/
+    Automatik" (`monospace.md` §3 Punkt 2) und verschiebt UI-
+    Entscheidungen in die Firmware, wo sie schwerer änderbar sind als
+    im RPi-Code. Auch ijons eigene Vorgabe schließt das aus.
+  - **Eigenes/willkürliches Farbschema statt Ampel-Konvention** —
+    verworfen: IEC 60204-1 ist die in der Maschinensicherheit übliche,
+    vielen Nutzern (auch unbewusst) vertraute Konvention — genau die
+    Zielgruppe hier. Ein Abweichen hätte einen Grund gebraucht, den es
+    hier nicht gibt.
+  - **Amber auch für „gestoppt, erwartet" statt Rot** (da technisch
+    kein Fault) — verworfen: der Taster kommuniziert dem Bediener „ist
+    es sicher einzugreifen", nicht den internen Board-Zustand — aus
+    Bediener-Sicht ist „Auto-Scan beendet, Maschine steht" so oder so
+    ein Halt-Zustand, der wie ein Stop aussehen soll. Die interne
+    Unterscheidung (Fault vs. sauberer Stop) wird stattdessen über die
+    Blinkgeschwindigkeit transportiert, nicht über die Farbe.
+  - **Taster generell als reflexartiges Recovery/Resume verwenden**
+    (Druck im Rot-Zustand versucht `clear_fault()`+`arm()`) —
+    verworfen: widerspricht direkt dem in `sans-serif.md` §5.3 bereits
+    begründeten Grundsatz, dass Recovery nie eine einzelne
+    reflexartige Aktion sein darf.
+- **Konsequenzen:**
+  - `monospace.md` erweitert: neue Pin-Belegung (§2), neue Kommandos
+    `LED SET <r> <g> <b>` und unsolicited `EVENT BUTTON PRESSED`
+    (§4/§5), neuer §10.
+  - `sans-serif.md` erweitert: `set_led()`/`on_button_press` im
+    Arduino-Client (§1.2), neue Indikator-/Tasten-Logik-Komponente
+    (§11), Ergänzungen in §5.3 (Stop-Trigger) und §8.1 Schritt 7
+    (Start-Trigger).
+  - Neue Aufgaben T34 (Firmware/Protokoll-Hälfte) und T35 (RPi-Client +
+    Indikator-Logik-Hälfte), Muster wie T20/T21/T22 (`tasks.md`).
+  - **Verbleibende offene Punkte** (Blau-Verhalten, Amber-Umfang und
+    LED-Polarität sind mit der 2026-08-08-Klärung oben erledigt): exakte
+    Blink-Frequenzen (1 Hz/4–5 Hz sind Vorschläge, keine gemessenen/
+    getesteten Werte); die in Punkt 3 markierte Arbeitsannahme zu „Neuer
+    Job" innerhalb eines bereits laufenden Jobs (kein Effekt) — Annahme,
+    nicht explizit bei ijon bestätigt.
+- **Quelle:** ijon (Chat, 2026-08-07, Foto des Tasters, Pinbelegung
+  6 Kontakte 2×Taster+R/G/B/C); Recherche Adafruit #3350 / Yueqing Husa
+  Electric (Claude, Websuche, 2026-08-07, siehe
+  `docs/hardware/electronics.md` §3.3); IEC 60204-1 Tabelle 5 /
+  IEC 60447 (allgemein bekannte Konvention für Drucktasterfarben in der
+  Maschinensicherheit, nicht im Detail gegen den Normtext geprüft —
+  falls das für die tatsächliche Umsetzung sicherheitsrelevant wird,
+  Normtext direkt beschaffen statt sich auf diese Zusammenfassung zu
+  verlassen); ijon (Chat, 2026-08-08: Blau-Taste = neuer Job, Amber
+  immer bei automatischer Bewegung — löst die beiden zuvor offenen
+  Fragen aus Punkt 2/3 auf); ijon (Chat, 2026-08-08: Diodentest-Ergebnis
+  C = Sammelanode, löst Punkt 5 auf, siehe
+  `docs/hardware/electronics.md` §3.3).

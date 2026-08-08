@@ -9,9 +9,10 @@
 >
 > Language: **Rust**. Runs as a single application, one job at a time —
 > no message broker, no microservices split. Talks to the ESP32 FOC
-> board via the G-code protocol in `bldc-driver.md`, to the Arduino via
-> the line protocol in `monospace.md`, and reads the BMP180 pressure
-> sensor directly over I2C (no intermediary board).
+> board via the G-code protocol in `ligature.md`, and to the Arduino
+> via the line protocol in `monospace.md` — which also owns the BMP180
+> pressure sensor (physically wired there, not to the RPi; see §1.2 for
+> its two read modes). No direct RPi-to-sensor I2C connection exists.
 >
 > UI language: English only. No localization infrastructure yet, but
 > avoid hard-coding strings in a way that makes adding German later a
@@ -33,7 +34,7 @@ in §8.
 
 ### 1.1 FOC-board client
 
-Rust client speaking the G-code protocol defined in `bldc-driver.md`
+Rust client speaking the G-code protocol defined in `ligature.md`
 over USB-serial, direct connection to the RPi. Exposes to the rest of
 this application:
 
@@ -42,29 +43,62 @@ this application:
   obtained explicit user confirmation (§8, screen 1)
 - `move_to_top(target_mm)` (a plain `G0` to a small absolute value near
   the homed-zero position — there is no dedicated board-side command for
-  this, see `bldc-driver.md` §10) — refused upstream (by the board) if
+  this, see `ligature.md` §10) — refused upstream (by the board) if
   not homed; this client surfaces that as a distinguishable error, not a
   generic failure. Used both by the touchscreen recovery control (§8)
   and to park the box at job end, before `disarm()`.
 - `move_fast(target_mm)` / `move_slow(target_mm)` (`G0`/`G1` — both
   always absolute; there's no relative-move mode in this protocol, see
-  `bldc-driver.md` §6)
+  `ligature.md` §6)
 - `complete_page_turn(target_mm, retreat_mm) -> final_position_mm`
   (`G73`) — runs the board's entire upward turn-completion motion
   (embedded retreat, then climb to `target_mm`) in one call; while it's
   in flight, this client polls `status()` in a loop so the caller (§5)
   can react to position crossings (e.g. trigger the Arduino turn-blower
   around 80% of page width) without waiting for the call to return.
-  Can be cancelled mid-flight by calling `stop()` — the caller (§5)
-  does this when its own concurrent pickup-success check fails; the
-  board has no concept of pickup success/failure itself, it's purely a
-  motion command. Does **not** include the following descent — the
-  *next* `touchdown()` call handles that.
+  Can be cancelled mid-flight by calling **`abort_attempt()`, not
+  `stop()`** (corrected 2026-08-02, see `ligature.md` §3.8 — an
+  earlier version of this document used `stop()`/`M112` for this, which
+  was the same real design mistake `ligature.md` itself originally
+  had and has since corrected) — the caller (§5) does this when its own
+  concurrent pickup-success check fails; the board has no concept of
+  pickup success/failure itself, it's purely a motion command. Does
+  **not** include the following descent — the *next* `touchdown()` call
+  handles that.
 - `touchdown(press_value) -> {stop_position_mm, compression}` (`G30`)
 - `resume()` (`M24`) — must only be called after `capture_pair()` (§2)
   has actually succeeded, never just falling through in sequence
-- `stop()` (`M112`)
-- `status() -> {state, position_mm, torque, homed}` (`?`)
+- `abort_attempt()` (`M53`, `ligature.md` §6.2) — the **routine** way
+  to cancel an in-flight move (specifically `complete_page_turn()` on a
+  failed pickup check, above). Stops motion only — stays armed and
+  homed, no fault, no re-arming needed; the caller sends a fresh
+  `touchdown()` afterward for the retry. **Not for genuine emergencies**
+  — see `stop()` below.
+- `stop()` (`M112`) — **genuine emergency stop only** (Stop-button
+  presses, unsolicited faults, §5.3) — never for routine pickup-failure
+  handling, that's `abort_attempt()` above. Disarms and puts the board
+  into a latched fault state; nothing moves again until
+  `clear_fault()` + a fresh `arm()`.
+- `clear_fault()` (`M999`, `ligature.md` §3.8/§5) — clears the fault
+  state `stop()` latches. Does **not** itself re-arm or re-home; the
+  caller must still call `arm()` (and `home()` again, since disarming
+  clears the homed state) before any motion works. Two separate calls,
+  deliberately — recovering from a genuine stop should never be a
+  single reflexive action.
+- `status() -> {state, position_mm, velocity_mm_s, torque, homed, mode}`
+  (`?`, `ligature.md` §5) — `state` now includes `Probing` (a
+  `touchdown()`'s active contact-search phase) as distinct from
+  `Moving` (a plain positional move) — callers that care about *why*
+  the box is moving should check for this distinction, not treat all
+  motion alike. `mode` reflects whichever drive mode (`ligature.md`
+  §11) is currently active.
+- Also listens continuously for the unsolicited `status ...` heartbeat
+  (`ligature.md` §4.2/§12, rate configurable via a `set_heartbeat_rate()`
+  wrapper around `M155`) alongside the `fault ...` messages below —
+  primarily useful for the diagnostic tool (`foc_diag`,
+  `ligature.md` §16) and for tuning `touchdown()`'s detection
+  parameters, not required reading for the normal Auto-Scan flow, which
+  gets what it needs from polling `status()` directly.
 - Calibration triggers (`M40`/`M41`/`M42`) — exposed for a dedicated
   calibration entry point, not part of the normal scan flow (§8 has no
   screen for this yet; needs one)
@@ -83,21 +117,68 @@ the board itself.
 
 Rust client speaking the line protocol defined in `monospace.md` over
 USB-serial (a second, independent serial connection from the FOC
-board's). Exposes: `vacuum_on()`/`vacuum_off()`,
-`separation_fan_on()`/`separation_fan_off()`,
-`turn_blower_on()`/`turn_blower_off()`, `light_on()`/`light_off()`/`light_auto()`,
-`all_actuators_off()`. **No pneumatic-pressure-sensor read** — that
-sensor only exists if the (not yet decided) pneumatic rebuild happens,
-see `monospace.md` §7.
+board's). **Corrected 2026-08-02** to match the actual merged
+implementation (`sans` repo, `sans-core/src/hardware/mod.rs`,
+`HwClient`) — an earlier version of this section described a
+speculative API (paired `x_on()`/`x_off()` functions, `light_auto()`,
+a stream call returning a `PressureStream` object) that was never
+checked against what actually got built. Exposes:
 
-### 1.3 BMP180 driver
+- `set_vacuum(bool)`, `set_fan(bool)`, `set_blower(bool)`,
+  `set_light(bool)` — boolean-parameter style, not paired on/off
+  functions. **No `light_auto()`** — the firmware never implements
+  `LIGHT AUTO` (excluded from MVP, `monospace.md` §5); "auto" light
+  behavior described in §5.2 below is host-side sequencing of plain
+  `set_light(true)`/`set_light(false)` calls, not a firmware mode.
+- `all_off()` (`ALL OFF`) — atomically de-energizes vacuum, fan, and
+  blower; light untouched.
+- `press_once() -> mbar` (`PRESS?`, `monospace.md` §5/§6) —
+  single-shot, blocking, averaged for accuracy. Used wherever only one
+  reading is needed (calibration baseline, §4 step 5; per-attempt
+  baseline, §5.2 step 1).
+- **Streaming is callback-based, not a returned stream object:**
+  `open(path, baud, boot_delay, on_telemetry)` registers the telemetry
+  callback **once**, at connection-open time, for the connection's
+  whole lifetime — there is no separate "start streaming, get a handle
+  back" call. `start_press_stream()`/`stop_press_stream()`
+  (`PRESS START`/`PRESS STOP`) just toggle whether the *board* is
+  actively emitting `PRESS <mbar>` lines; whatever arrives while active
+  reaches `on_telemetry` directly, interleaved with ordinary
+  command/response traffic on the same connection
+  (`monospace.md` §4's `PRESS `-prefix framing is what makes the
+  interleaving unambiguous — implemented in `protocol::classify_line`,
+  not something callers need to reimplement). Used only during the
+  pickup-success check while `complete_page_turn()` is in flight
+  (§5.2 step 9) and during the calibration ascent (§4 steps 7–9) — must
+  always be stopped again afterward (success or failure), even though
+  the callback itself stays registered for the connection's lifetime.
 
-Direct I2C read (e.g. via a `smbus`-equivalent crate), standard Bosch
-calibration/read procedure. Exposes `read_ambient_pressure()` and
-`read_differential_pressure()`. No Arduino or ESP32 involvement — same
-process that commands the FOC board also reads pressure, so pickup
-detection never needs to correlate two independently-clocked serial
-links.
+- **Added 2026-08-08 (`monospace.md` §10, `architecture.md` AD-009):
+  `set_led(r: u8, g: u8, b: u8)`** (`LED SET <r> <g> <b>`) — sets the
+  status button's RGB ring to a raw color, takes effect immediately.
+  There is no `set_led_blink()` or similar — blinking is this client's
+  caller (§11) calling `set_led()` repeatedly on its own timer; the
+  Arduino has no concept of a blink mode (`monospace.md` §10.3).
+- **Added 2026-08-08: button presses arrive via a second callback,**
+  `on_button_press`, registered the same way as `on_telemetry` — once,
+  at `open()` time, for the connection's whole lifetime. Fires once per
+  `EVENT BUTTON PRESSED` line (`monospace.md` §10.2); there is no
+  release event and no query. `protocol::classify_line` (already
+  distinguishing `PRESS ` telemetry from ordinary responses) gets a
+  second prefix to recognize, `EVENT `, routing to this callback instead
+  of `on_telemetry` — same interleaving mechanism, one more prefix.
+
+**Correlation note (residual from AD-001's original reasoning,
+`architecture.md`):** pressure now arrives over this Arduino connection
+instead of an RPi-local I2C read, so the pickup-success check (§5.2 step
+9) and the FOC board's `status()` polling (§1.1, used for relay timing
+in the same window) run over two independent serial links with their
+own latency, not perfectly synchronous. This is a deliberate trade-off
+against the original single-process/I2C design (AD-001), not a fact to
+lose track of — nothing in the current design needs sub-tens-of-
+milliseconds alignment between the two (the pressure check reacts to
+its own stream independently of position), but if that ever changes,
+this is where the assumption would break.
 
 ---
 
@@ -154,21 +235,22 @@ reach the archive.
    `calib_img_left`, `calib_img_right`.
 4. `resume()` — required before any further motion (the board is
    holding).
-5. `read_ambient_pressure()` → `p_baseline`, before vacuum engages.
-6. `vacuum_on()`, `separation_fan_on()`.
+5. `press_once()` → `p_baseline`, before vacuum engages.
+6. `start_press_stream()`, `set_vacuum(true)`, `set_fan(true)`.
 7. **Detection #1 (pickup-success drop)** — the same check every normal
-   page-turn does (§5 step 8): shortly after vacuum engages,
-   `read_differential_pressure()` should show a clear drop vs.
-   `p_baseline`. No drop = pickup failure, same error condition as a
-   normal flip-cycle failure (exact retry/abort handling for this
-   calibration context is an open point, not specified further here).
+   page-turn does (§5.2 step 9): shortly after vacuum engages, the
+   pressure stream should show a clear drop vs. `p_baseline`. No drop =
+   pickup failure, same error condition as a normal flip-cycle failure
+   (exact retry/abort handling for this calibration context is an open
+   point, not specified further here).
 8. Once pickup is confirmed: ascend via a **distinct monitored-ascent
-   move** (not `move_to_top()` — a plain vertical move, watching
-   pressure as it goes, with no page-separation wiggle and no return
-   trip; this is a one-way measurement, not a flip cycle).
-9. **Detection #2 (page-separation rise, calibration-only)** — watch for
-   the differential pressure suddenly rising back toward baseline once
-   the page's trailing edge clears the suction box. Exact detection
+   move** (not `move_to_top()` — a plain vertical move, watching the
+   still-open pressure stream as it goes, with no page-separation
+   wiggle and no return trip; this is a one-way measurement, not a flip
+   cycle).
+9. **Detection #2 (page-separation rise, calibration-only)** — watch the
+   pressure stream for a sudden rise back toward baseline once the
+   page's trailing edge clears the suction box. Exact detection
    algorithm needs real hardware data to finalize; a starting
    placeholder is "value crosses back above a threshold, having been
    steady below it since step 7." A small compensating offset
@@ -176,10 +258,10 @@ reach the archive.
    position — needs empirical determination.
 10. Record the box's position (mm, plus any lag offset) at detection
     #2's point as `page_width_mm`.
-11. `vacuum_off()`, `separation_fan_off()`. Box ends at the top; the
-    user manually pages the book back to its actual first page before
-    Auto-Scan starts (this calibration page was arbitrary, not
-    necessarily page 1).
+11. `stop_press_stream()`, `set_vacuum(false)`, `set_fan(false)`. Box
+    ends at the top; the user manually pages the book back to its
+    actual first page before Auto-Scan starts (this calibration page
+    was arbitrary, not necessarily page 1).
 12. Return `{page_width_mm, calib_img_left, calib_img_right}`.
 
 **Tap-interaction (coordinate mapping):**
@@ -224,12 +306,12 @@ Every call is identical — this operation doesn't know or care whether
 it's attempt 1, 2, or 3 for the current slot; that bookkeeping is
 entirely the loop driver's (§5.3) job. Inputs: `page_width_mm`.
 
-1. `read_ambient_pressure()` → `p_baseline`. Read fresh on every
+1. `press_once()` → `p_baseline`. Read fresh on every
    attempt, before any pneumatics for this attempt engage.
 2. `touchdown()` — a real closed-loop descend-until-contact every
    attempt, including retries; never a move to a remembered position
    (book thickness/binding varies page to page).
-3. If the light switch is in Auto mode: `light_on()`.
+3. If the light switch is in Auto mode: `set_light(true)`.
 4. `capture_pair()` — both cameras, box stationary at the
    touchdown/compressed position. Taken on **every** attempt, not just
    the first — every attempt's photo gets OCR'd (step 3, cross-checked
@@ -237,20 +319,25 @@ entirely the loop driver's (§5.3) job. Inputs: `page_width_mm`.
    up archived. Hold `img_left`, `img_right`.
 5. `resume()` — required before any of the following steps; the board
    is holding after touchdown and refuses to move otherwise.
-6. `separation_fan_on()`.
-7. If the light switch is in Auto mode: `light_off()`.
-8. `vacuum_on()`.
+6. `set_fan(true)`.
+7. If the light switch is in Auto mode: `set_light(false)`.
+8. `set_vacuum(true)`.
 9. Call `complete_page_turn(target_mm, retreat_mm)` (§1.1, `G73`) —
    this starts the board's entire remaining upward motion for the
    attempt immediately; there is no separate move or command for the
-   pickup-success check itself, only a pressure reading the RPi takes
-   on its own. **While this call is in flight**, run two things
-   concurrently on the host side:
+   pickup-success check itself, only a stream of pressure readings the
+   Arduino sends while the RPi separately polls the FOC board for
+   position (§1.2's correlation note applies here). **While this call
+   is in flight**, run two things concurrently on the host side:
    - **The pickup-success check.** Not a single point-in-time read —
-     `read_differential_pressure()` is polled **continuously**
-     throughout `complete_page_turn()`'s execution (the same monitoring
-     loop already polling `status()` for relay timing). Expected
-     physical behavior, two distinct readings to tell apart:
+     `start_press_stream()` is opened right before this call and
+     consumed **continuously** throughout `complete_page_turn()`'s
+     execution (concurrently with, but on a separate connection from,
+     the same loop's `status()` polling of the FOC board for relay
+     timing below). `stop_press_stream()` is called once this step
+     ends, in every case (success or failure), before the next slot's
+     `touchdown()`. Expected physical behavior, two distinct readings
+     to tell apart:
      - Switching the vacuum pump on causes **some** drop below
        `p_baseline` even with **no** page actually held — air still
        flows (leaks) through the suction cups when nothing is sealing
@@ -282,10 +369,11 @@ entirely the loop driver's (§5.3) job. Inputs: `page_width_mm`.
      - **On success (reading stays past the threshold, no sudden
        return):** do nothing — let `complete_page_turn()` keep running
        toward its target, uninterrupted.
-     - **On either failure condition:** call `stop()`
-       (`M112`) to abort the in-flight `complete_page_turn()`
-       immediately, wherever the box happens to be. Then
-       `separation_fan_off()`, `vacuum_off()`, then a fresh
+     - **On either failure condition:** call `abort_attempt()`
+       (`M53` — **not** `stop()`/`M112`, this is a routine, expected
+       outcome, not an emergency, see §1.1) to abort the in-flight
+       `complete_page_turn()` immediately, wherever the box happens to
+       be. Then `set_fan(false)`, `set_vacuum(false)`, then a fresh
        `touchdown()` (`G30`) for the retry — it descends correctly from
        wherever the abort left the box, no matter where that was.
        Return `{pickup_result: "failure", images: {img_left, img_right},
@@ -297,14 +385,14 @@ entirely the loop driver's (§5.3) job. Inputs: `page_width_mm`.
    - **Relay timing**, independent of the pickup check above: poll
      `status()` in a loop and, based on the reported position, drive
      the Arduino relays at the right moments (the board has no
-     awareness of any of this, per `bldc-driver.md` §6.1):
-     - `separation_fan_off()` once past the ~60–70%-of-page-width zone
+     awareness of any of this, per `ligature.md` §6.1):
+     - `set_fan(false)` once past the ~60–70%-of-page-width zone
        (early in this call, right after the embedded retreat).
-     - `turn_blower_on()` once past ~80% of page width. (This
+     - `set_blower(true)` once past ~80% of page width. (This
        move-then-engage timing is the simpler reading of the source
        process description; needs validating against real page-turn
        behavior — the blower may need to fire earlier/concurrently.)
-     - `vacuum_off()` — timing not fixed: natural page separation
+     - `set_vacuum(false)` — timing not fixed: natural page separation
        likely happens near 100% of page width on the way up, but
        whether this should tie to that detection or simply happen once
        `complete_page_turn()` returns (box now held at the top of this
@@ -335,7 +423,7 @@ entirely the loop driver's (§5.3) job. Inputs: `page_width_mm`.
     slot's `touchdown()` call is what brings it back down; while that
     call is in flight, poll `status()` again to catch the box passing
     back down through ~90% of page width and call
-    `turn_blower_off()` at that point — the blower's on-time spans the
+    `set_blower(false)` at that point — the blower's on-time spans the
     end of *this* attempt's `complete_page_turn()` and the start of the
     *next* slot's `touchdown()`, not just this attempt in isolation.
 
@@ -376,14 +464,37 @@ once archived):
    same `sequence_number`).
 
 **Stop handling:** must interrupt promptly, including mid-attempt —
-requires the FOC client's and Arduino client's immediate-stop/
-all-actuators-off operations. An unsolicited hard-stop fault from the
-FOC board (§1.1) is treated exactly like a user-pressed Stop. On Stop,
-fault, or a 3-failure abort: halt, leave the machine in the stopped
-state for the recovery controls (§8). A slot that was mid-attempt when
-stopped has **no** archived image — resuming after a Stop starts that
-slot over from a fresh attempt 1, never from wherever the interrupted
-attempt was.
+requires the FOC client's `stop()` (`M112`, genuine emergency only, not
+`abort_attempt()`/`M53`) and the Arduino client's all-actuators-off
+operation. An unsolicited hard-stop fault from the FOC board (§1.1) is
+treated exactly like a user-pressed Stop. **Added 2026-08-08:** the
+physical Start/Stop/E-Stop button (§11) is a third trigger for this same
+path, alongside the touchscreen [Stop] and an unsolicited FOC fault —
+whenever §11's indicator logic considers the machine to be in its
+"active" (amber) state, an `on_button_press` event routes here exactly
+like a touchscreen Stop tap, no separate handling. **On Stop or an
+unsolicited fault specifically** (see open question below re: 3-failure abort):
+halt, leave the machine in the stopped state for the recovery controls
+(§8) — the FOC board is now latched in its fault state
+(`ligature.md` §3.8), so **recovery requires the UI to actually call
+`clear_fault()` (`M999`) then `arm()` (`M3`) again before any move
+(including `move_to_top()`) will work**, not just present the recovery
+screen and let the next command through. A slot that was mid-attempt
+when stopped has **no** archived image — resuming after a Stop starts
+that slot over from a fresh attempt 1, never from wherever the
+interrupted attempt was.
+
+**Open question, flagged 2026-08-02, not resolved here:** this
+paragraph groups "Stop, fault, or a 3-failure abort" as leading to the
+same halted state. A 3-failure abort (step above) isn't itself a board-
+level fault — every individual failed attempt already used the routine
+`abort_attempt()`/`M53` path, which leaves the board `Armed`, not
+faulted. Grouping it with genuine Stop/fault here may be the same kind
+of category-blur this session already found and fixed at the protocol
+level (`ligature.md`'s old `M112`) — or it may be an intentional UX
+choice (present the same recovery screen either way, for consistency,
+even though the underlying board state differs). Not changed here
+pending ijon's call.
 
 ---
 
@@ -402,7 +513,7 @@ attempt was.
   `threshold_mbar_used`, `touchdown_position`, `touchdown_compression`.
   Purpose: deriving real pickup-success/-failure thresholds empirically
   across many books, and correlating stop position/press force/
-  pneumatic pressure for debugging — kept separate from
+  differential pressure for debugging — kept separate from
   `metadata.json` (§7) since it has a different consumer and lifecycle
   (cross-book analysis, not per-book archival data).
 
@@ -476,7 +587,10 @@ instruction (§0).
    number, in the middle, and place it in the cradle" → [Ready] →
    preview shown → "Tap the page number on the left" → tap → "...now
    the right" → tap → confirm.
-7. **Auto-Scan start.** "Ready to scan?" [Start].
+7. **Auto-Scan start.** "Ready to scan?" [Start]. **Added 2026-08-08:**
+   the physical status button is green and solid on this screen (§11)
+   — a press here is an equivalent alternate trigger for the same
+   [Start] action, not a separate path.
 8. **Auto-Scan live screen.** Full-page preview + zoom preview (§2's
    `make_preview`, unscaled 100% crop) + page counter + live pressure
    diagnostics (§6) — [Stop] always visible and reachable.
@@ -556,3 +670,93 @@ post-processing since the book is closed/rigid with no fixed reference
 rectangle. Not part of this application; see
 `reference/cover-photo-postprocessing.md`. This is VM-side (Z2)
 post-processing work, out of scope for this RPi application entirely.
+
+---
+
+## 11. Physical status button — indicator & input
+
+> Added 2026-08-08. Full decision background, alternatives considered,
+> and open questions for ijon: `architecture.md` AD-009. Physical part
+> and wiring: `docs/hardware/electronics.md` §3.3. Arduino-side
+> protocol this section drives: `monospace.md` §10.
+
+A single momentary pushbutton with an RGB LED ring, wired to the
+Arduino (§1.2), doubling as Start, Stop, and emergency stop depending
+on which of these two things is true right now: is anything moving
+(vacuum/fan/blower/motion), and is the machine sitting at the "ready to
+scan" gate (§8.1 step 7). This component owns exactly two
+responsibilities: (a) continuously deciding what color/pattern the LED
+should show, given the rest of this application's current state, and
+(b) interpreting each `on_button_press` event (§1.2) in light of that
+same state. It holds no state of its own beyond "what did I last tell
+the LED" — the actual machine state it reads comes from the FOC client
+(§1.1), the Auto-Scan loop driver (§5.3), and the UI's current screen
+(§8).
+
+### 11.1 Color/pattern → machine state
+
+| Machine state | Color | Pattern | A button press does |
+|---|---|---|---|
+| Standby — §8.1, outside any automatically-commanded motion | Blue | Solid | New job (§11.2) |
+| Ready to scan — §8.1 screen 7 | Green | Solid | Start (§8.1 step 7 — same as tapping [Start]) |
+| Automatic motion — **any** host-commanded move, not just Auto-Scan: homing at job start (§8.1 step 1), calibration's touchdown/ascent (§4), Auto-Scan itself (§8.1 screen 8), `move_to_top()` (job-end park, recovery screen §8.2.3), jog moves (§8.2.3 [Move down]) | Amber | Solid | Stop (§5.3 — same as tapping [Stop]: `stop()` + `all_off()`) |
+| Stopped, expected — user-initiated Stop, or the 3-failure abort (§8.2 screen 2/3) | Red | Slow blink (~1 Hz) | Nothing (§11.2 — recovery is touchscreen-only by design, §5.3) |
+| Stopped, unsolicited fault — an unrequested `fault ...` from the FOC board (§1.1) | Red | Fast blink (~4–5 Hz) | Nothing, same as above |
+
+Rationale for this exact mapping, the amber choice, and the two red
+patterns: `architecture.md` AD-009 — not repeated here. **Blink timing
+is this component's own responsibility**, implemented as a simple
+repeating `set_led()` / `set_led(0,0,0)` alternation on a timer; the
+Arduino has no blink concept of its own (`monospace.md` §10.3).
+
+**Resolved (ijon, 2026-08-08, `architecture.md` AD-009):** Amber covers
+*every* automatically-commanded move, not only Auto-Scan/calibration as
+originally scoped — see the table row above for the full list.
+Practically: derive Amber from the FOC client's (§1.1) `status().state`
+being `Moving` or `Probing`, **plus** treating the whole Auto-Scan
+screen (§8.1 step 8) as Amber even during its brief non-moving pauses
+between individual moves (vacuum-engage before ascent, etc.) — deriving
+Amber purely from `state` there would otherwise flicker
+Amber→Blue→Amber within a single pickup attempt, which §5.1's existing
+safety framing (vacuum and motion are treated as one hazard window)
+argues against. **Still open:** exact blink frequencies (defaults
+above, not tuned).
+
+### 11.2 Button-press interpretation
+
+Evaluated in this order, every time `on_button_press` fires:
+
+1. **If the machine is in the Amber (automatic-motion) state:** always
+   Stop, regardless of anything else — this is the "E-Stop" half of the
+   button's job, and it takes priority over every other interpretation.
+2. **Else if the machine is in the Green (ready-to-scan) state:** Start.
+3. **Else if the machine is in the Blue (standby) state: New job.**
+   **Resolved (ijon, 2026-08-08):** triggers the same entry point the
+   touchscreen uses to begin a book (§8.1 steps 1–2 — homing if not
+   already homed, otherwise straight into cover capture). **Working
+   assumption, not separately confirmed with ijon — flag/correct if
+   wrong:** this only applies at genuine idle (before the first job of
+   a session, or after a previous job's upload/finalization, §8.1 step
+   10, has completed) — Blue also covers the in-between screens of an
+   *already-started* job (cover capture, ISBN check, metadata,
+   calibration setup, §8.1 steps 2–6), where a press stays inert rather
+   than being read as "new job": those screens already have their own
+   specific touchscreen confirmations, and starting a second, unrelated
+   job while the current one is mid-setup has no safe, unambiguous
+   meaning.
+4. **Red:** no defined action, unchanged — recovery from a genuine stop
+   must stay a touchscreen-only, two-step action (`clear_fault()` then
+   `arm()`), never a single reflexive button press (§5.3).
+
+### 11.3 Implementation note
+
+This is presentation/routing logic layered on top of already-specified
+components (§1.1 FOC client status, §1.2 Arduino client, §5.3 loop
+driver, §8 UI screen state) — it doesn't own or duplicate any of their
+state, only reads it to decide what to show and how to route a press.
+A natural home is a small task that polls/subscribes to "what screen/
+state are we in" at some short fixed interval (e.g. every 100–200ms,
+fast enough that the LED transition feels immediate to a user standing
+at the machine, slow enough to be irrelevant next to the serial link's
+own latency) and calls `set_led()` only when the target color/pattern
+actually changes, not on every tick.
