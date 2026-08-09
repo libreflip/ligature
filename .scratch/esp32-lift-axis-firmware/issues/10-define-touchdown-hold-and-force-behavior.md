@@ -1,8 +1,29 @@
 # Define touchdown, stationary hold, and press-level behavior
 
 Type: grilling
+Status: resolved
 Blocked by: 06, 07, 08
 
 ## Question
 
 What dedicated `G30` control sequence should descend until genuine book contact, distinguish sustained velocity-sag/current saturation from startup acceleration or obstruction, cut the approach immediately at detection, establish and report the normalized 0–100% press level and stop Z, remain stationary across photo capture until explicit `M24`, and fail safely across representative book thicknesses and binding stiffnesses? Decide whether touchdown may cross the compiled bottom soft limit as proposed by `docs/plan/ligature.md`, define the separate absolute runaway bound if so, and specify the device measurements that choose and validate the maximum q-axis current represented by 100%, the default press level, and the hold behavior. Physical-force calibration is outside the current route.
+
+## Answer
+
+`G30` is a bounded downward contact search followed by a measured-current torque hold. It requires an armed controller with trusted position and starts only when downward search distance remains. It uses the production low-speed feedback strategy, the commissioned touchdown velocity and ramps, and the selected press level as its q-axis current limit. A level of 0% is valid but provides zero current and will ordinarily fail to establish motion; firmware never raises a requested level silently.
+
+Before contact detection can arm, the lift axis must make at least one output-side Hall sector of downward progress. This prevents startup stiction from being accepted as immediate contact and means an axis already pressed against a book must first be raised. After a commissioned startup grace period, contact is detected when the velocity loop has requested approximately the selected current limit continuously, measured q-axis current is consistent with that saturation, and there has been no net Hall progress for a commissioned dwell. Use Hall progress rather than the noisy instantaneous Hall velocity estimate. The exact grace, current tolerance, and dwell come from assembled-axis diagnostic captures.
+
+Motor telemetry cannot distinguish a book from another obstruction. Sustained resistance satisfying the detector inside the valid search range is therefore accepted as touchdown; this limitation is explicit rather than represented as genuine material identification. Invalid or non-finite current feedback, ADC clipping, illegal or lost Hall feedback, endstop assertion, and control-loop deadline failure remain immediate stopping failures, never touchdown.
+
+Touchdown does not cross the bottom soft limit. The compiled limit must include every supported book-contact position while remaining the deepest mechanically safe operating position. Derive the operation deadline from the distance between the starting Z and the inclusive bottom limit divided by touchdown speed, plus the normal startup and settling allowance, subject to the immutable operation-duration ceiling. Reaching the bottom limit without contact, exceeding the deadline, or otherwise failing to establish the required progress commands zero PWM, reports `TOUCHDOWN_FAILED`, and disarms. Reject `G30` without motion when no downward search distance remains.
+
+On contact detection, atomically leave velocity control and enter SimpleFOC torque motion control with `TorqueControlType::foc_current`, commanding the same downward q-axis current represented by the selected press level. This is the production equivalent of `MC0` with measured-current torque control, not an angle move toward the bottom limit. Wait for a Hall-quiet settling window before declaring success. The successful result reports the settled hold Z and commanded normalized press level; it does not report force or compression. Event-time and settling current samples belong in status or diagnostic capture.
+
+The settled position becomes the hold reference. Torque hold may remain active indefinitely until explicit release because photo timing is external; it has no ordinary operation watchdog. Current/Hall validity, endstop, bottom-limit, and control-loop checks remain active. Any subsequent Hall-observable displacement in either direction beyond the commissioned position tolerance reports `HOLD_MOVED`, commands zero PWM, and disarms. Sub-Hall-sector compliance is deliberately unobservable.
+
+`M24` releases the fixed press-current command atomically into angle control targeted at the current measured shaft angle. This keeps the box stationary rather than dropping it at zero PWM and avoids unwinding toward an old angle target. The controller remains armed and position-trusted, and the next accepted travel replaces that hold target normally. Exact command availability, abort ownership, and response spelling remain for the state-machine and protocol decisions.
+
+Press level maps linearly from 0% at zero q-axis current to 100% at the commissioned production continuous-current ceiling. That ceiling is the lowest trustworthy continuous bound imposed by the motor, driver, measured-current range, and the policy resolved by [Choose transient current fault policy](16-choose-transient-current-fault-policy.md); it is not derived from book-damage testing. The compiled default is the lowest current that repeatedly initiates downward motion of the assembled lift axis from several positions. Book damage is the operator's responsibility for this hackerspace machine.
+
+Device acceptance must establish that default, capture the contact detector's startup and sustained-resistance behavior, and exercise touchdown, settling, stationary hold, and `M24` release on at least one thin/flexible and one thick/stiff representative book. A no-contact run must stop safely at the bottom limit. The production verification decision supplies the final repetition and soak requirements; compilation or host tests alone cannot validate this behavior.

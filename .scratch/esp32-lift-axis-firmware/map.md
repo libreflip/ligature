@@ -38,6 +38,7 @@ Produce a decision-complete implementation and verification route for `docs/plan
 - [Choose the calibration-validity and persistence model](issues/07-choose-calibration-validity-and-persistence-model.md) — Compile manually validated settings into one commissioned configuration; keep Studio changes volatile and direct, remeasure ADC offsets at boot, and use normalized press level instead of force calibration.
 - [Define the assembled lift-axis powered bring-up and load-test ladder](issues/13-define-assembled-lift-axis-powered-bring-up-and-load-test-ladder.md) — Use production firmware to direction-check, home at upper `Z=0`, calibrate distance, and set a negative bottom soft limit; a permanent one-command relative positional-limit override enables the unhomed check without bypassing safety ceilings.
 - [Define homing, endstop, and position-trust behavior](issues/08-define-homing-endstop-and-position-trust-behavior.md) — Home from the immediate raw endstop release at `Z=0`, pull off to a `Z=-2 mm` top limit, enforce bounded seeks and runtime limits, and preserve trust across stops while Hall observation remains continuous.
+- [Define touchdown, stationary hold, and press-level behavior](issues/10-define-touchdown-hold-and-force-behavior.md) — Detect bounded in-limit resistance only after real descent, then hold indefinitely at normalized measured q-axis current until `M24` transfers stationarity to angle control.
 
 ## Not yet specified
 
