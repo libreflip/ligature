@@ -55,3 +55,7 @@ _Avoid_: Positive-downward Z, depth as positive Z
 **Positional-limit override**:
 A one-command authorization for the next relative travel move to proceed without trusted homing or positional soft-limit checks. It does not override the endstop rule or electrical and motion safety ceilings.
 _Avoid_: Safety override, unlimited jog, unhomed absolute move
+
+**Position trust**:
+Confidence that the lift-axis coordinate frame has remained continuously known since successful homing. A routine stop, disarm, or emergency stop does not by itself invalidate it; reset, loss of position observation, failed or interrupted homing, and unexpected upper-endstop contact do. It deliberately does not account for gearbox or belt slip.
+_Avoid_: Persisted position, guaranteed physical position
