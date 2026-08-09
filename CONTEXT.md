@@ -21,20 +21,20 @@ The deliberate downward contact-seeking operation that ends with the suction box
 _Avoid_: Move to zero, downward travel
 
 **Commissioning interface**:
-A development-only connection used during supervised bring-up to inspect telemetry and tune bounded controller parameters. It is not the production host-control protocol and must obey the firmware's motion-safety gates.
-_Avoid_: Production control interface, maintenance API
-
-**Commissioning session**:
-An explicitly entered runtime state in which the commissioning interface may broadly control and tune the motor within immutable firmware safety ceilings and any optional narrower test limits. Opening or reconnecting the interface does not enter this state.
-_Avoid_: GUI connection, ordinary arming
-
-**Raw commissioning mode**:
-A deliberate escalation within a commissioning session that permits otherwise-blocked SimpleFOC alignment, characterization, and autotune controls. It remains subject to immutable firmware ceilings and ends on explicit exit, stop, fault, or reset.
-_Avoid_: Unrestricted mode, safety bypass
+The direct SimpleFOC Studio connection used during supervised bring-up to inspect telemetry and tune runtime controller parameters within immutable firmware safety ceilings. It requires no unlock or exclusive mode and is distinct from the production host protocol.
+_Avoid_: Commissioning session, production control interface, maintenance API
 
 **Tuning profile**:
-The versioned set of accepted controller parameters and limits promoted from volatile commissioning changes into a human-reviewable project file and ESP32 persistence. It excludes targets, enabled state, session state, and electrical-calibration identity.
+The accepted controller parameters and limits compiled into a commissioned configuration after supervised tuning. Runtime commissioning changes may override it until reset but never modify it.
 _Avoid_: GUI state, calibration record
+
+**Commissioned configuration**:
+The manually validated lift-axis calibration, tuning, limits, and hardware settings compiled into a firmware image together with an explicit commissioned marker. It is immutable at runtime and restored on reset.
+_Avoid_: NVS calibration, automatic hardware identity
+
+**Press level**:
+A normalized 0–100% touchdown and hold command mapped linearly to the commissioned maximum q-axis current. It is not a calibrated physical force.
+_Avoid_: Force, pressure calibration
 
 **Production host protocol**:
 The ESP32 serial behavior contract used by the bookscanner host to arm, move, calibrate, query, and stop the lift axis. Its required semantics are stable independently of the particular command spellings used to express them.

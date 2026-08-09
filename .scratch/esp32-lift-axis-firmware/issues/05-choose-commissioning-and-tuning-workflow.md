@@ -55,3 +55,7 @@ Do not prescribe a fixed GUI rate before measurement. Start conservatively, then
 Use one supervised end-to-end commissioning acceptance procedure rather than separate compatibility and powered-integration stages. In that procedure, connect WebController and check discovery, filtering, profile output, reset/reconnect behavior, and timing before unlocking powered controls in the same run. Any failed motionless gate ends that run before motion. The procedure then exercises powered tuning under the established ceilings and records the maximum acceptable telemetry rate and stop/disconnect behavior.
 
 The glossary additions for **commissioning session**, **raw commissioning mode**, and **tuning profile** are recorded in [`CONTEXT.md`](../../../CONTEXT.md).
+
+## Superseded access and persistence details
+
+[Choose the calibration-validity and persistence model](07-choose-calibration-validity-and-persistence-model.md) later simplified this hackerspace workflow. The single firmware image exposes bounded Studio controls without commissioning/raw unlocks or an exclusive mode; normal host commands may use volatile Studio changes until reset. Accepted settings are copied into a source-controlled commissioned configuration and flashed, not promoted to JSON/NVS at runtime. Immutable electrical/motion ceilings, explicit motion commands, volatile edits, reset restoration, and control-loop priority remain binding.
