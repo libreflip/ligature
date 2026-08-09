@@ -47,3 +47,11 @@ _Avoid_: Progress log, telemetry stream
 **Diagnostic capture**:
 A triggered, timestamped set of control-loop samples buffered on the ESP32 and transferred only on explicit request when transfer cannot disturb active control.
 _Avoid_: Live serial logging, production telemetry stream
+
+**Lift-axis coordinate frame**:
+The homed position at the upper endstop is Z=0. Upward motion increases Z and downward motion decreases Z, so positions within the ordinary travel range are negative.
+_Avoid_: Positive-downward Z, depth as positive Z
+
+**Positional-limit override**:
+A one-command authorization for the next relative travel move to proceed without trusted homing or positional soft-limit checks. It does not override the endstop rule or electrical and motion safety ceilings.
+_Avoid_: Safety override, unlimited jog, unhomed absolute move

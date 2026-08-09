@@ -36,6 +36,7 @@ Produce a decision-complete implementation and verification route for `docs/plan
 - [Choose the control architecture and travel-fault criteria](issues/06-choose-control-architecture-and-travel-fault-criteria.md) — Use position/velocity/measured-current cascade control, simple target settling and progress/deadline checks, explicit disarming failures, and commissioning-derived limits without added thermal or overspeed machinery.
 - [Implement development-only WebController motor-tuning firmware](issues/15-implement-development-webcontroller-motor-tuning-firmware.md) — Geared-motor commissioning passes explicit alignment, ±75 rad/s velocity, bounded bidirectional position settling, monitoring, and PWM-off controls; sub-20-rad/s stick-slip and unprovoked physical fault recovery remain explicitly unclaimed.
 - [Choose the calibration-validity and persistence model](issues/07-choose-calibration-validity-and-persistence-model.md) — Compile manually validated settings into one commissioned configuration; keep Studio changes volatile and direct, remeasure ADC offsets at boot, and use normalized press level instead of force calibration.
+- [Define the assembled lift-axis powered bring-up and load-test ladder](issues/13-define-assembled-lift-axis-powered-bring-up-and-load-test-ladder.md) — Use production firmware to direction-check, home at upper `Z=0`, calibrate distance, and set a negative bottom soft limit; a permanent one-command relative positional-limit override enables the unhomed check without bypassing safety ceilings.
 
 ## Not yet specified
 
