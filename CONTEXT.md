@@ -41,8 +41,12 @@ The ESP32 serial behavior contract used by the bookscanner host to arm, move, ca
 _Avoid_: SimpleFOC GUI protocol, fixed G-code table
 
 **Operation response**:
-The production protocol's immediate acknowledgment that an operation was accepted, followed by exactly one terminal success or failure result. Requested status and unsolicited hard faults are separate from this lifecycle.
+The production protocol's immediate acknowledgment that an operation was accepted, followed by exactly one terminal success or failure result. A preempting stop or hard fault may use one terminal line that identifies the cancelled command and closes both obligations; it never emits duplicate terminal lines.
 _Avoid_: Progress log, telemetry stream
+
+**Exclusive command**:
+A motion or calibration command whose accepted execution spans control-loop iterations and excludes ordinary commands until it reaches a terminal result. Immediate stop and status-related commands remain available, and nothing queues.
+_Avoid_: Blocking command, locking command, active slot
 
 **Diagnostic capture**:
 A triggered, timestamped set of control-loop samples buffered on the ESP32 and transferred only on explicit request when transfer cannot disturb active control.
