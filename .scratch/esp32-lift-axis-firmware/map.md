@@ -42,6 +42,7 @@ Produce and verify the finished production firmware described by `docs/plan/liga
 - [Define touchdown, stationary hold, and press-level behavior](issues/10-define-touchdown-hold-and-force-behavior.md) — Detect bounded in-limit resistance only after real descent, then hold indefinitely at normalized measured q-axis current until `M24` transfers stationarity to angle control.
 - [Define the production operation and fault state machine](issues/09-define-production-operation-and-fault-state-machine.md) — Use one trust-bearing sum-type state machine with explicit exclusive-command, override, hold, and fault transitions; no lifecycle booleans, client-specific state, implicit motion, queueing, or duplicate preemption terminals.
 - [Define the production protocol and observability contract](issues/11-define-production-protocol-and-observability-contract.md) — Use a strict host-testable production dialect beside bounded native Studio commands, with deterministic operation framing, state-derived trust, bounded telemetry/capture, and no baseline composite page-turn operation.
+- [Implement the first production-firmware baseline](issues/19-implement-first-production-firmware-baseline.md) — Added a buildable, host-conformant, fail-closed production core and ESP32 adapter with provisional-policy seams; physical validation and final commissioning integration remain explicitly unclaimed.
 
 ## Not yet specified
 
