@@ -40,6 +40,7 @@ Produce a decision-complete implementation and verification route for `docs/plan
 - [Define homing, endstop, and position-trust behavior](issues/08-define-homing-endstop-and-position-trust-behavior.md) — Home from the immediate raw endstop release at `Z=0`, pull off to a `Z=-2 mm` top limit, enforce bounded seeks and runtime limits, and preserve trust across stops while Hall observation remains continuous.
 - [Define touchdown, stationary hold, and press-level behavior](issues/10-define-touchdown-hold-and-force-behavior.md) — Detect bounded in-limit resistance only after real descent, then hold indefinitely at normalized measured q-axis current until `M24` transfers stationarity to angle control.
 - [Define the production operation and fault state machine](issues/09-define-production-operation-and-fault-state-machine.md) — Use one trust-bearing sum-type state machine with explicit exclusive-command, override, hold, and fault transitions; no lifecycle booleans, client-specific state, implicit motion, queueing, or duplicate preemption terminals.
+- [Define the production protocol and observability contract](issues/11-define-production-protocol-and-observability-contract.md) — Use a strict host-testable production dialect beside bounded native Studio commands, with deterministic operation framing, state-derived trust, bounded telemetry/capture, and no baseline composite page-turn operation.
 
 ## Not yet specified
 
