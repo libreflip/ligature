@@ -37,10 +37,10 @@ before flashing the SimpleFOC test:
 /Users/hrmny/.platformio/penv/bin/pio run -e simplefoc-hall-validation
 ```
 
-Both environments use 460800 baud. The firmware and PlatformIO monitor inherit
-that rate from the shared `serial_baud` setting in `platformio.ini`. If the
-monitor produces corrupted text, set it back to the known-good 115200 fallback,
-rebuild, and flash again; changing only the monitor rate will not work.
+Both environments use 500000 baud. The firmware uses the shared
+`kSerialBaud` constant, and PlatformIO applies the same monitor rate to every
+environment through the default `[env]` settings in `platformio.ini`. Changing
+only the monitor rate will not work.
 
 ## Flash and monitor
 
@@ -52,7 +52,7 @@ Flash the SimpleFOC variant explicitly:
 ```
 
 The expected boot record begins with
-`READY app=simplefoc-hall-validation baud=460800` and confirms
+`READY app=simplefoc-hall-validation baud=500000` and confirms
 `motor0_pwm=LOW motor1_pwm=LOW pwm_state=OFF`, `simplefoc=2.4.0`,
 `pole_pairs=4`, and
 `pullups=EXTERNAL`.
@@ -114,8 +114,9 @@ after each capture.
 
 The sensor-only procedure passed on an MKS ESP32 FOC V1.0 with the
 42BSA78-24-01 motor, the A/B/C mapping documented above, and the external 3.3 V
-pull-up board. Both firmware and the serial monitor ran successfully at 460800
-baud.
+pull-up board. The Hall behavior passed on that hardware; rerun the procedure
+after flashing the current 500000-baud firmware to validate the updated serial
+transport on device.
 
 | Sequence direction | Observed states | SimpleFOC angle delta | Duration | Result |
 |---|---|---:|---:|---|

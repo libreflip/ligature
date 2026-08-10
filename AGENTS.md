@@ -15,7 +15,7 @@ The default PlatformIO environment is `hall-validation`:
 /Users/hrmny/.platformio/penv/bin/pio test -e hall-validation
 ```
 
-These commands build, flash, open the 460800-baud serial monitor, and run PlatformIO tests, respectively. Upload and monitor commands require connected hardware. Follow `docs/hall-validation.md` for the guided manual revolution check and the separate `simplefoc-hall-validation` environment.
+These commands build, flash, open the 500000-baud serial monitor, and run PlatformIO tests, respectively. Upload and monitor commands require connected hardware. Follow `docs/hall-validation.md` for the guided manual revolution check and the separate `simplefoc-hall-validation` environment.
 
 ## Coding Style & Naming Conventions
 

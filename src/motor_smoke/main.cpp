@@ -6,10 +6,7 @@
 
 #include "motor_smoke/alignment_failure.h"
 #include "motor_smoke/hall_direction.h"
-
-#ifndef MOTOR_SMOKE_SERIAL_BAUD
-#define MOTOR_SMOKE_SERIAL_BAUD 460800UL
-#endif
+#include "serial_baud.h"
 
 namespace {
 
@@ -976,7 +973,7 @@ void setup() {
   hallSensor.init();
   hallSensor.enableInterrupts(handleHallA, handleHallB, handleHallC);
 
-  Serial.begin(MOTOR_SMOKE_SERIAL_BAUD);
+  Serial.begin(kSerialBaud);
   delay(100);
   Serial.printf("BOOT app=motor-smoke reset_reason=%d\n",
                 static_cast<int>(esp_reset_reason()));
@@ -1012,7 +1009,7 @@ void setup() {
       "READY app=motor-smoke baud=%lu simplefoc=2.4.0 motor0_pwm=LOW "
       "motor1_pwm=ZERO pwm_state=OFF isolation=MAINS_ONLY driver_init=%s "
       "current_sense_init=%s command=RUN\n",
-      static_cast<unsigned long>(MOTOR_SMOKE_SERIAL_BAUD),
+      kSerialBaud,
       driverInitialized ? "PASS" : "FAIL",
       currentSenseInitialized ? "PASS" : "FAIL");
 }

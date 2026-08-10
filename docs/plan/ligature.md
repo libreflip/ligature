@@ -146,9 +146,8 @@ which motor channel): `reference/esp32-foc-firmware-requirements.md`.
 
 ## 4. Command/response protocol
 
-Text-based, one command per line, newline-terminated ASCII, **115200
-baud** (matches the Arduino relay board, `monospace.md`, for operator
-consistency — not a SimpleFOC requirement). Built as an extension of
+Text-based, one command per line, newline-terminated ASCII, **500000
+baud** (the project-wide Ligature rate — not a SimpleFOC requirement). Built as an extension of
 SimpleFOC's `Commander`, with an added framing layer so **unsolicited**
 messages (§4.2) can reach the host without being asked — plain
 `Commander` doesn't support that alone.
@@ -453,7 +452,7 @@ touchdown-detection dwell time and thresholds, the same role continuous
 BMP180 streaming played for characterizing the pressure sensor
 (`docs/hardware/bmp180-vacuum-drop-test.md`). Exact achievable rate
 during `Probing` needs empirical measurement on real hardware (bounded
-by the 115200 baud link). Reverts to the base rate automatically once
+by the 500000 baud link). Reverts to the base rate automatically once
 `Probing` ends — contact detected (→ `Holding`) or `M53` abort
 (→ `Armed`) — no separate command needed to step the rate back down.
 
@@ -581,7 +580,7 @@ framework = arduino
 lib_deps = askuric/Simple FOC@^2.3.5
 lib_archive = false
 
-monitor_speed = 115200
+monitor_speed = 500000
 upload_speed = 921600
 
 ; Translated from the Arduino IDE settings this board's docs assume

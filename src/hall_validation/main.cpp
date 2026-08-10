@@ -1,16 +1,14 @@
 #include <Arduino.h>
 #include <soc/gpio_struct.h>
 
+#include "serial_baud.h"
+
 #ifndef HALL_USE_SIMPLEFOC
 #define HALL_USE_SIMPLEFOC 0
 #endif
 
 #if HALL_USE_SIMPLEFOC
 #include <SimpleFOC.h>
-#endif
-
-#ifndef HALL_SERIAL_BAUD
-#define HALL_SERIAL_BAUD 460800UL
 #endif
 
 namespace {
@@ -668,7 +666,7 @@ void setup() {
   pinMode(kHallPinC, INPUT);
 #endif
 
-  Serial.begin(HALL_SERIAL_BAUD);
+  Serial.begin(kSerialBaud);
   delay(100);
 
   currentState = readHallStateFast();
@@ -689,7 +687,7 @@ void setup() {
 #else
       "hall-validation",
 #endif
-      static_cast<unsigned long>(HALL_SERIAL_BAUD), kHallPinA, kHallPinB,
+      kSerialBaud, kHallPinA, kHallPinB,
       kHallPinC);
   printHallState(currentState);
 #if HALL_USE_SIMPLEFOC

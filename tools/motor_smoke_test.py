@@ -14,7 +14,7 @@ import serial
 from serial.tools import list_ports
 
 
-BAUD_RATE = 460800
+BAUD_RATE = 500000
 SERIAL_READ_TIMEOUT_S = 0.20
 READY_TIMEOUT_S = 15.0
 ALIGNMENT_TIMEOUT_S = 25.0

@@ -4,10 +4,7 @@
 #include <math.h>
 
 #include "motor_tuning/command_policy.h"
-
-#ifndef MOTOR_TUNING_SERIAL_BAUD
-#define MOTOR_TUNING_SERIAL_BAUD 460800UL
-#endif
+#include "serial_baud.h"
 
 namespace {
 
@@ -466,7 +463,7 @@ void setup() {
   hallSensor.init();
   hallSensor.enableInterrupts(hallA, hallB, hallC);
 
-  Serial.begin(MOTOR_TUNING_SERIAL_BAUD);
+  Serial.begin(kSerialBaud);
   delay(100);
 
   motor1Driver.voltage_power_supply = kSupplyVoltage;

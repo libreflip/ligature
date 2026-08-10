@@ -755,9 +755,9 @@
   gefunden (Stand dieses Eintrags) — nicht angenommen, dass sich das seit
   2026-07-30 geändert hat.
 - **Entscheidung:**
-  1. **Baudrate auf `115200` festgelegt** (`ligature.md` §4) — reine
-     Konsistenzentscheidung zur `monospace`-Baudrate, keine technische
-     Notwendigkeit von SimpleFOCs `Commander`.
+  1. **Baudrate auf `500000` festgelegt** (`ligature.md` §4) — die
+     projektweite Ligature-Einstellung, keine technische Notwendigkeit
+     von SimpleFOCs `Commander`.
   2. **PlatformIO-Projektkonfiguration konkret ausformuliert**
      (`ligature.md` §15), inkl. der über Websuche verifizierten,
      nicht offensichtlichen `lib_archive = false`-Notwendigkeit für
